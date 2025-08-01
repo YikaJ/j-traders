@@ -333,14 +333,23 @@ const Dashboard: React.FC = () => {
                 xaxis: { title: { text: '日期' } },
                 yaxis: { title: { text: '点数' } },
                 showlegend: false,
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)'
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                modebar: {
+                  bgcolor: '#000',
+                  color: 'white',
+                  activecolor: '#1890ff'
+                },
+                font: {
+                  color: '#ffffff'
+                }
               }}
               config={{ responsive: true }}
               style={{ width: '100%' }}
             />
           </div>
         </div>
+        
 
         {/* 自选股监控 */}
         <div className="card bg-base-100 shadow-xl">

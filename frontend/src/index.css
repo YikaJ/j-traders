@@ -1,6 +1,12 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark;
+  root: ":root";
+  include: ;
+  exclude: ;
+  prefix: ;
+  logs: true;
+}
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -13,4 +19,16 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+/* 修复 Plotly modebar 中的 a 标签显示问题 */
+div.js-plotly-plot div.plotly div.modebar a {
+  display: inline-block !important;
+}
+/* 确保图表容器有正确的尺寸 */
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
 }
