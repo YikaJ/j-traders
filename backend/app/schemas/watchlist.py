@@ -36,6 +36,9 @@ class WatchlistUpdate(BaseModel):
 class WatchlistResponse(WatchlistBase):
     """自选股响应模型"""
     id: int
+    price: Optional[float] = 0.0
+    change: Optional[float] = 0.0
+    changePercent: Optional[float] = 0.0
     addedAt: str
     
     class Config:

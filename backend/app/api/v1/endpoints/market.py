@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timedelta
 
 from app.db.database import get_db
-from app.db.models.stock import MarketIndex, StockDaily
+from app.db.models.stock import MarketIndex, StockDaily, Stock
 from app.services.tushare_service import tushare_service
 from app.schemas.market import MarketIndexResponse, StockQuoteResponse
 
@@ -34,12 +34,25 @@ async def get_market_indices(
         市场指数列表
     """
     try:
-        # 先从数据库获取数据
-        query = db.query(MarketIndex)
+        # 先从数据库获取数据，确保每个指数只返回最新的一条记录
         if trade_date:
-            query = query.filter(MarketIndex.trade_date == trade_date)
-        
-        db_indices = query.order_by(MarketIndex.trade_date.desc()).limit(10).all()
+            # 如果指定了日期，获取该日期的所有指数数据
+            db_indices = db.query(MarketIndex).filter(
+                MarketIndex.trade_date == trade_date
+            ).all()
+        else:
+            # 获取每个指数的最新数据
+            from sqlalchemy import func
+            subquery = db.query(
+                MarketIndex.symbol,
+                func.max(MarketIndex.trade_date).label('max_date')
+            ).group_by(MarketIndex.symbol).subquery()
+            
+            db_indices = db.query(MarketIndex).join(
+                subquery,
+                (MarketIndex.symbol == subquery.c.symbol) & 
+                (MarketIndex.trade_date == subquery.c.max_date)
+            ).all()
         
         # 如果数据库没有数据或数据过旧，从Tushare获取
         if not db_indices or (not trade_date and len(db_indices) < 3):
@@ -47,11 +60,11 @@ async def get_market_indices(
             try:
                 indices_df = await tushare_service.get_market_indices(trade_date)
                 if not indices_df.empty:
-                    # 保存到数据库
+                    # 保存到数据库，使用merge避免重复
                     for _, row in indices_df.iterrows():
                         index_data = MarketIndex(
                             symbol=row.get('ts_code', ''),
-                            name=row.get('ts_code', ''),  # 这里需要映射到中文名称
+                            name=row.get('index_name', _get_index_name(row.get('ts_code', ''))),
                             trade_date=row.get('trade_date', ''),
                             open=row.get('open'),
                             high=row.get('high'),
@@ -63,31 +76,72 @@ async def get_market_indices(
                             vol=row.get('vol'),
                             amount=row.get('amount')
                         )
-                        db.merge(index_data)  # 使用merge避免重复
+                        db.merge(index_data)
                     
                     db.commit()
-                    # 重新查询
-                    db_indices = query.order_by(MarketIndex.trade_date.desc()).limit(10).all()
+                    
+                    # 重新查询，确保每个指数只返回最新的一条记录
+                    if trade_date:
+                        db_indices = db.query(MarketIndex).filter(
+                            MarketIndex.trade_date == trade_date
+                        ).all()
+                    else:
+                        subquery = db.query(
+                            MarketIndex.symbol,
+                            func.max(MarketIndex.trade_date).label('max_date')
+                        ).group_by(MarketIndex.symbol).subquery()
+                        
+                        db_indices = db.query(MarketIndex).join(
+                            subquery,
+                            (MarketIndex.symbol == subquery.c.symbol) & 
+                            (MarketIndex.trade_date == subquery.c.max_date)
+                        ).all()
             except Exception as e:
-                logger.warning(f"获取Tushare数据失败，使用模拟数据: {e}")
+                logger.warning(f"获取Tushare数据失败: {e}")
         
-        # 如果还是没有数据，返回模拟数据
+        # 如果数据库还是没有数据，尝试直接从Tushare获取最新数据
         if not db_indices:
-            return _get_mock_indices()
+            logger.info("数据库无数据，直接从Tushare获取最新指数数据")
+            try:
+                indices_df = await tushare_service.get_market_indices()
+                if not indices_df.empty:
+                    result = []
+                    # 确保每个指数只返回一条记录
+                    seen_symbols = set()
+                    for _, row in indices_df.iterrows():
+                        symbol = row.get('ts_code', '')
+                        if symbol not in seen_symbols:
+                            seen_symbols.add(symbol)
+                            result.append(MarketIndexResponse(
+                                symbol=symbol,
+                                name=row.get('index_name', _get_index_name(symbol)),
+                                price=row.get('close', 0),
+                                change=row.get('change', 0),
+                                changePercent=row.get('pct_chg', 0),
+                                volume=int(row.get('vol', 0)),
+                                amount=row.get('amount', 0),
+                                tradeDate=row.get('trade_date', '')
+                            ))
+                    return result
+            except Exception as e:
+                logger.error(f"直接从Tushare获取数据失败: {e}")
         
-        # 转换为响应模型
+        # 转换为响应模型，确保没有重复
         result = []
+        seen_symbols = set()
         for index in db_indices:
-            result.append(MarketIndexResponse(
-                symbol=index.symbol,
-                name=_get_index_name(index.symbol),
-                price=index.close or 0,
-                change=index.change or 0,
-                changePercent=index.pct_chg or 0,
-                volume=int(index.vol or 0),
-                amount=index.amount or 0,
-                tradeDate=index.trade_date
-            ))
+            if index.symbol not in seen_symbols:
+                seen_symbols.add(index.symbol)
+                result.append(MarketIndexResponse(
+                    symbol=index.symbol,
+                    name=index.name or _get_index_name(index.symbol),
+                    price=index.close or 0,
+                    change=index.change or 0,
+                    changePercent=index.pct_chg or 0,
+                    volume=int(index.vol or 0),
+                    amount=index.amount or 0,
+                    tradeDate=index.trade_date
+                ))
         
         return result
     
@@ -122,9 +176,17 @@ async def get_stock_quotes(
             if not quotes_df.empty:
                 result = []
                 for _, row in quotes_df.iterrows():
+                    # 获取股票名称
+                    stock_name = row.get('name', '')
+                    if not stock_name or stock_name == row.get('code', ''):
+                        # 从数据库获取股票名称
+                        stock_info = db.query(Stock).filter(Stock.symbol == row.get('code', '')).first()
+                        if stock_info:
+                            stock_name = stock_info.name
+                    
                     result.append(StockQuoteResponse(
                         symbol=row.get('code', ''),
-                        name=row.get('name', ''),
+                        name=stock_name or row.get('code', ''),
                         price=float(row.get('price', 0)),
                         change=float(row.get('change', 0)),
                         changePercent=float(row.get('changepercent', 0)),
@@ -143,9 +205,13 @@ async def get_stock_quotes(
             ).order_by(StockDaily.trade_date.desc()).first()
             
             if latest_data:
+                # 获取股票名称
+                stock_info = db.query(Stock).filter(Stock.symbol == symbol).first()
+                stock_name = stock_info.name if stock_info else symbol
+                
                 result.append(StockQuoteResponse(
                     symbol=latest_data.symbol,
-                    name=latest_data.symbol,  # 这里需要从stock表获取名称
+                    name=stock_name,
                     price=latest_data.close or 0,
                     change=latest_data.change or 0,
                     changePercent=latest_data.pct_chg or 0,
@@ -153,8 +219,31 @@ async def get_stock_quotes(
                     amount=latest_data.amount or 0
                 ))
             else:
-                # 返回模拟数据
-                result.append(_get_mock_quote(symbol))
+                # 尝试从Tushare获取该股票的最新数据
+                try:
+                    daily_df = await tushare_service.get_stock_daily(symbol, limit=1)
+                    if not daily_df.empty:
+                        row = daily_df.iloc[0]
+                        
+                        # 获取股票名称
+                        stock_info = db.query(Stock).filter(Stock.symbol == symbol).first()
+                        stock_name = stock_info.name if stock_info else symbol
+                        
+                        result.append(StockQuoteResponse(
+                            symbol=row.get('ts_code', symbol),
+                            name=stock_name,
+                            price=row.get('close', 0),
+                            change=row.get('change', 0),
+                            changePercent=row.get('pct_chg', 0),
+                            volume=int(row.get('vol', 0)),
+                            amount=row.get('amount', 0)
+                        ))
+                    else:
+                        logger.warning(f"无法获取股票{symbol}的数据")
+                        continue
+                except Exception as e:
+                    logger.warning(f"获取股票{symbol}数据失败: {e}")
+                    continue
         
         return result
     
@@ -172,58 +261,103 @@ async def get_stock_history(
     db: Session = Depends(get_db)
 ):
     """
-    获取股票历史数据
+    获取股票或指数历史数据
     
     Args:
-        symbol: 股票代码
+        symbol: 股票代码或指数代码
         days: 获取天数，默认30天
         db: 数据库会话
     
     Returns:
-        股票历史数据
+        历史数据
     """
     try:
-        # 从数据库获取历史数据
-        history_data = db.query(StockDaily).filter(
-            StockDaily.symbol == symbol
-        ).order_by(StockDaily.trade_date.desc()).limit(days).all()
+        # 判断是否为指数
+        is_index = symbol.endswith('.SH') and symbol.startswith('000') or symbol.endswith('.SZ') and symbol.startswith('399')
         
-        # 如果数据不足，尝试从Tushare获取
-        if len(history_data) < min(days, 10):
-            try:
-                end_date = datetime.now().strftime('%Y%m%d')
-                start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
-                
-                daily_df = await tushare_service.get_stock_daily(
-                    symbol, start_date, end_date
-                )
-                
-                if not daily_df.empty:
-                    # 保存到数据库
-                    for _, row in daily_df.iterrows():
-                        daily_data = StockDaily(
-                            symbol=row.get('ts_code', ''),
-                            trade_date=row.get('trade_date', ''),
-                            open=row.get('open'),
-                            high=row.get('high'),
-                            low=row.get('low'),
-                            close=row.get('close'),
-                            pre_close=row.get('pre_close'),
-                            change=row.get('change'),
-                            pct_chg=row.get('pct_chg'),
-                            vol=row.get('vol'),
-                            amount=row.get('amount')
-                        )
-                        db.merge(daily_data)
+        if is_index:
+            # 查询指数历史数据
+            history_data = db.query(MarketIndex).filter(
+                MarketIndex.symbol == symbol
+            ).order_by(MarketIndex.trade_date.desc()).limit(days).all()
+            
+            # 如果数据不足，尝试从Tushare获取
+            if len(history_data) < min(days, 10):
+                try:
+                    end_date = datetime.now().strftime('%Y%m%d')
+                    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
                     
-                    db.commit()
-                    # 重新查询
-                    history_data = db.query(StockDaily).filter(
-                        StockDaily.symbol == symbol
-                    ).order_by(StockDaily.trade_date.desc()).limit(days).all()
+                    # 使用新的指数历史数据方法
+                    indices_df = await tushare_service.get_index_history(symbol, start_date, end_date, days)
+                    if not indices_df.empty:
+                        # 保存到数据库
+                        for _, row in indices_df.iterrows():
+                            index_record = MarketIndex(
+                                symbol=row.get('ts_code', ''),
+                                name=row.get('index_name', _get_index_name(row.get('ts_code', ''))),
+                                trade_date=row.get('trade_date', ''),
+                                open=row.get('open'),
+                                high=row.get('high'),
+                                low=row.get('low'),
+                                close=row.get('close'),
+                                pre_close=row.get('pre_close'),
+                                change=row.get('change'),
+                                pct_chg=row.get('pct_chg'),
+                                vol=row.get('vol'),
+                                amount=row.get('amount')
+                            )
+                            db.merge(index_record)
+                        
+                        db.commit()
+                        # 重新查询
+                        history_data = db.query(MarketIndex).filter(
+                            MarketIndex.symbol == symbol
+                        ).order_by(MarketIndex.trade_date.desc()).limit(days).all()
+                        
+                except Exception as e:
+                    logger.warning(f"获取{symbol}指数历史数据失败: {e}")
+        else:
+            # 查询股票历史数据
+            history_data = db.query(StockDaily).filter(
+                StockDaily.symbol == symbol
+            ).order_by(StockDaily.trade_date.desc()).limit(days).all()
+            
+            # 如果数据不足，尝试从Tushare获取
+            if len(history_data) < min(days, 10):
+                try:
+                    end_date = datetime.now().strftime('%Y%m%d')
+                    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
                     
-            except Exception as e:
-                logger.warning(f"获取{symbol}历史数据失败: {e}")
+                    daily_df = await tushare_service.get_stock_daily(
+                        symbol, start_date, end_date
+                    )
+                    
+                    if not daily_df.empty:
+                        # 保存到数据库
+                        for _, row in daily_df.iterrows():
+                            daily_data = StockDaily(
+                                symbol=row.get('ts_code', ''),
+                                trade_date=row.get('trade_date', ''),
+                                open=row.get('open'),
+                                high=row.get('high'),
+                                low=row.get('low'),
+                                close=row.get('close'),
+                                pre_close=row.get('pre_close'),
+                                change=row.get('change'),
+                                pct_chg=row.get('pct_chg'),
+                                vol=row.get('vol'),
+                                amount=row.get('amount')
+                            )
+                            db.merge(daily_data)
+                        
+                        db.commit()
+                        # 重新查询
+                        history_data = db.query(StockDaily).filter(
+                            StockDaily.symbol == symbol
+                        ).order_by(StockDaily.trade_date.desc()).limit(days).all()
+                        
+                except Exception as e:
+                    logger.warning(f"获取{symbol}历史数据失败: {e}")
         
         # 转换为响应格式
         result = {
@@ -242,9 +376,51 @@ async def get_stock_history(
                 "amount": data.amount
             })
         
-        # 如果没有数据，返回模拟数据
+        # 如果数据库没有数据，尝试直接从Tushare获取
         if not result["data"]:
-            result["data"] = _get_mock_history(symbol, days)
+            logger.info(f"数据库无{symbol}历史数据，直接从Tushare获取")
+            try:
+                if is_index:
+                    # 获取指数历史数据
+                    end_date = datetime.now().strftime('%Y%m%d')
+                    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+                    
+                    indices_df = await tushare_service.get_index_history(symbol, start_date, end_date, days)
+                    if not indices_df.empty:
+                        for _, row in indices_df.iterrows():
+                            result["data"].append({
+                                "date": row.get('trade_date', ''),
+                                "open": row.get('open'),
+                                "high": row.get('high'),
+                                "low": row.get('low'),
+                                "close": row.get('close'),
+                                "volume": row.get('vol'),
+                                "amount": row.get('amount')
+                            })
+                else:
+                    # 获取股票数据
+                    end_date = datetime.now().strftime('%Y%m%d')
+                    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+                    
+                    daily_df = await tushare_service.get_stock_daily(
+                        symbol, start_date, end_date
+                    )
+                    
+                    if not daily_df.empty:
+                        for _, row in daily_df.iterrows():
+                            result["data"].append({
+                                "date": row.get('trade_date', ''),
+                                "open": row.get('open'),
+                                "high": row.get('high'),
+                                "low": row.get('low'),
+                                "close": row.get('close'),
+                                "volume": row.get('vol'),
+                                "amount": row.get('amount')
+                            })
+                    else:
+                        logger.warning(f"Tushare也无法获取{symbol}的历史数据")
+            except Exception as e:
+                logger.error(f"直接从Tushare获取{symbol}历史数据失败: {e}")
         
         return result
     
@@ -266,87 +442,3 @@ def _get_index_name(symbol: str) -> str:
     return index_names.get(symbol, symbol)
 
 
-def _get_mock_indices() -> List[MarketIndexResponse]:
-    """获取模拟指数数据"""
-    return [
-        MarketIndexResponse(
-            symbol="000001.SH",
-            name="上证指数",
-            price=3245.12,
-            change=15.43,
-            changePercent=0.48,
-            volume=245600000,
-            amount=1234567890,
-            tradeDate=datetime.now().strftime('%Y%m%d')
-        ),
-        MarketIndexResponse(
-            symbol="399001.SZ",
-            name="深证成指",
-            price=10234.56,
-            change=-23.45,
-            changePercent=-0.23,
-            volume=189400000,
-            amount=987654321,
-            tradeDate=datetime.now().strftime('%Y%m%d')
-        ),
-        MarketIndexResponse(
-            symbol="399006.SZ",
-            name="创业板指",
-            price=2156.78,
-            change=8.92,
-            changePercent=0.42,
-            volume=156700000,
-            amount=654321987,
-            tradeDate=datetime.now().strftime('%Y%m%d')
-        )
-    ]
-
-
-def _get_mock_quote(symbol: str) -> StockQuoteResponse:
-    """获取模拟股票行情"""
-    import random
-    
-    base_price = random.uniform(10, 100)
-    change = random.uniform(-2, 2)
-    
-    return StockQuoteResponse(
-        symbol=symbol,
-        name=f"股票{symbol}",
-        price=base_price,
-        change=change,
-        changePercent=(change / base_price) * 100,
-        volume=random.randint(100000, 10000000),
-        amount=random.uniform(1000000, 100000000)
-    )
-
-
-def _get_mock_history(symbol: str, days: int) -> List[dict]:
-    """获取模拟历史数据"""
-    import random
-    
-    data = []
-    base_price = random.uniform(20, 80)
-    
-    for i in range(days):
-        date = (datetime.now() - timedelta(days=days-i-1)).strftime('%Y%m%d')
-        
-        # 模拟价格波动
-        change = random.uniform(-0.05, 0.05)
-        base_price *= (1 + change)
-        
-        high = base_price * random.uniform(1.0, 1.05)
-        low = base_price * random.uniform(0.95, 1.0)
-        open_price = random.uniform(low, high)
-        close = base_price
-        
-        data.append({
-            "date": date,
-            "open": round(open_price, 2),
-            "high": round(high, 2),
-            "low": round(low, 2),
-            "close": round(close, 2),
-            "volume": random.randint(100000, 5000000),
-            "amount": random.uniform(1000000, 50000000)
-        })
-    
-    return data

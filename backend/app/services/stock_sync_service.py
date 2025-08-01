@@ -38,8 +38,8 @@ class StockSyncService:
             stock_df = await tushare_service.get_stock_list()
             
             if stock_df is None or stock_df.empty:
-                self.logger.warning("未获取到股票数据，使用模拟数据")
-                return await self._sync_mock_data(db)
+                self.logger.error("未获取到股票数据")
+                raise ValueError("无法从Tushare获取股票数据")
             
             # 统计信息
             stats = {
@@ -122,104 +122,7 @@ class StockSyncService:
         stock.float_share = row.get('float_share', stock.float_share)
         stock.is_active = row.get('list_status', 'L') == 'L'
     
-    async def _sync_mock_data(self, db: Session) -> Dict[str, Any]:
-        """同步模拟数据"""
-        self.logger.info("使用模拟股票数据")
-        
-        mock_stocks = [
-            {
-                'ts_code': '000001.SZ',
-                'name': '平安银行',
-                'industry': '银行',
-                'area': '深圳',
-                'list_date': '19910403',
-                'list_status': 'L',
-                'total_share': 1943820000,
-                'float_share': 1943820000
-            },
-            {
-                'ts_code': '000002.SZ',
-                'name': '万科A',
-                'industry': '房地产开发',
-                'area': '深圳',
-                'list_date': '19910129',
-                'list_status': 'L',
-                'total_share': 1112710000,
-                'float_share': 1112710000
-            },
-            {
-                'ts_code': '600036.SH',
-                'name': '招商银行',
-                'industry': '银行',
-                'area': '深圳',
-                'list_date': '20020409',
-                'list_status': 'L',
-                'total_share': 2526310000,
-                'float_share': 2526310000
-            },
-            {
-                'ts_code': '600519.SH',
-                'name': '贵州茅台',
-                'industry': '白酒',
-                'area': '贵州',
-                'list_date': '20010827',
-                'list_status': 'L',
-                'total_share': 1256200000,
-                'float_share': 1256200000
-            },
-            {
-                'ts_code': '000858.SZ',
-                'name': '五粮液',
-                'industry': '白酒',
-                'area': '四川',
-                'list_date': '19980427',
-                'list_status': 'L',
-                'total_share': 3868600000,
-                'float_share': 3868600000
-            },
-            {
-                'ts_code': '300750.SZ',
-                'name': '宁德时代',
-                'industry': '电池',
-                'area': '福建',
-                'list_date': '20180611',
-                'list_status': 'L',
-                'total_share': 4638900000,
-                'float_share': 4638900000
-            }
-        ]
-        
-        stats = {
-            "total_fetched": len(mock_stocks),
-            "new_stocks": 0,
-            "updated_stocks": 0,
-            "errors": 0,
-            "start_time": datetime.now(),
-            "end_time": None
-        }
-        
-        for stock_data in mock_stocks:
-            try:
-                symbol = stock_data['ts_code']
-                existing_stock = db.query(Stock).filter(Stock.symbol == symbol).first()
-                
-                if existing_stock:
-                    self._update_stock_info(existing_stock, stock_data)
-                    stats["updated_stocks"] += 1
-                else:
-                    new_stock = self._create_stock_record(stock_data)
-                    db.add(new_stock)
-                    stats["new_stocks"] += 1
-                    
-            except Exception as e:
-                self.logger.error(f"处理模拟股票数据失败 {stock_data.get('ts_code')}: {e}")
-                stats["errors"] += 1
-        
-        db.commit()
-        stats["end_time"] = datetime.now()
-        stats["duration"] = (stats["end_time"] - stats["start_time"]).total_seconds()
-        
-        return stats
+
     
     async def get_stock_count(self, db: Session) -> Dict[str, int]:
         """获取股票数量统计"""

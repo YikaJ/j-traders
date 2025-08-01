@@ -287,45 +287,10 @@ class FactorService:
                 db.close()
         
         except Exception as e:
-            logger.warning(f"获取测试数据失败，使用模拟数据: {e}")
-            return self._generate_mock_data(symbols, start_date, end_date)
-    
-    def _generate_mock_data(self, symbols: List[str], start_date: str, end_date: str) -> pd.DataFrame:
-        """生成模拟测试数据"""
-        try:
-            import random
-            
-            data = []
-            for symbol in symbols:
-                # 生成30天的模拟数据
-                base_price = random.uniform(10, 100)
-                for i in range(30):
-                    date = (datetime.strptime(end_date, '%Y%m%d') - timedelta(days=29-i)).strftime('%Y%m%d')
-                    
-                    # 模拟价格波动
-                    change = random.uniform(-0.05, 0.05)
-                    base_price *= (1 + change)
-                    
-                    data.append({
-                        'symbol': symbol,
-                        'trade_date': date,
-                        'open': round(base_price * random.uniform(0.98, 1.02), 2),
-                        'high': round(base_price * random.uniform(1.0, 1.05), 2),
-                        'low': round(base_price * random.uniform(0.95, 1.0), 2),
-                        'close': round(base_price, 2),
-                        'volume': random.randint(100000, 5000000),
-                        'amount': random.uniform(1000000, 50000000),
-                        'pe_ttm': random.uniform(5, 50),
-                        'pb': random.uniform(0.5, 5),
-                        'total_mv': random.uniform(1000000, 100000000),
-                        'circ_mv': random.uniform(500000, 50000000)
-                    })
-            
-            return pd.DataFrame(data)
-        
-        except Exception as e:
-            logger.error(f"生成模拟数据失败: {e}")
+            logger.warning(f"获取测试数据失败: {e}")
             return pd.DataFrame()
+    
+
     
     async def _execute_factor_code(
         self,

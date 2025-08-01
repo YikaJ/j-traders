@@ -10,6 +10,7 @@ import logging
 from app.db.database import get_db
 from app.db.models.watchlist import Watchlist
 from app.db.models.stock import Stock
+from app.db.models.stock import StockDaily
 from app.services.tushare_service import tushare_service
 from app.schemas.watchlist import (
     WatchlistResponse, 
@@ -48,10 +49,56 @@ async def get_watchlist(
             # 获取股票基础信息
             stock_info = db.query(Stock).filter(Stock.symbol == item.symbol).first()
             
+            # 获取股票最新价格信息
+            latest_data = db.query(StockDaily).filter(
+                StockDaily.symbol == item.symbol
+            ).order_by(StockDaily.trade_date.desc()).first()
+            
+            # 如果没有历史数据，尝试从Tushare获取最新数据
+            price = 0.0
+            change = 0.0
+            change_percent = 0.0
+            
+            if latest_data:
+                price = latest_data.close or 0.0
+                change = latest_data.change or 0.0
+                change_percent = latest_data.pct_chg or 0.0
+            else:
+                # 尝试从Tushare获取最新数据
+                try:
+                    daily_df = await tushare_service.get_stock_daily(item.symbol, limit=1)
+                    if not daily_df.empty:
+                        row = daily_df.iloc[0]
+                        price = row.get('close', 0.0)
+                        change = row.get('change', 0.0)
+                        change_percent = row.get('pct_chg', 0.0)
+                        
+                        # 保存到数据库
+                        daily_data = StockDaily(
+                            symbol=row.get('ts_code', item.symbol),
+                            trade_date=row.get('trade_date', ''),
+                            open=row.get('open'),
+                            high=row.get('high'),
+                            low=row.get('low'),
+                            close=price,
+                            pre_close=row.get('pre_close'),
+                            change=change,
+                            pct_chg=change_percent,
+                            vol=row.get('vol'),
+                            amount=row.get('amount')
+                        )
+                        db.merge(daily_data)
+                        db.commit()
+                except Exception as e:
+                    logger.warning(f"获取{item.symbol}价格数据失败: {e}")
+            
             result.append(WatchlistResponse(
                 id=item.id,
                 symbol=item.symbol,
                 name=stock_info.name if stock_info else item.name or item.symbol,
+                price=price,
+                change=change,
+                changePercent=change_percent,
                 notes=item.notes or "",
                 tags=item.tags or "",
                 addedAt=item.added_at.isoformat() if item.added_at else "",
@@ -299,9 +346,31 @@ async def search_stocks(
             except Exception as e:
                 logger.warning(f"Tushare搜索失败: {e}")
         
-        # 如果还是没有结果，返回模拟数据
+        # 如果还是没有结果，尝试更宽松的搜索
         if not result:
-            result = _get_mock_search_results(keyword, limit)
+            logger.info(f"未找到匹配'{keyword}'的股票，尝试更宽松的搜索")
+            try:
+                # 尝试从Tushare获取所有股票进行本地搜索
+                stock_df = await tushare_service.get_stock_list()
+                if not stock_df.empty:
+                    # 在本地进行模糊搜索
+                    mask = (
+                        stock_df['ts_code'].str.contains(keyword, case=False, na=False) |
+                        stock_df['name'].str.contains(keyword, case=False, na=False)
+                    )
+                    filtered_df = stock_df[mask].head(limit)
+                    
+                    for _, row in filtered_df.iterrows():
+                        result.append(StockSearchResponse(
+                            symbol=row.get('ts_code', ''),
+                            name=row.get('name', ''),
+                            industry=row.get('industry', ''),
+                            area=row.get('area', ''),
+                            market=row.get('market', ''),
+                            listDate=row.get('list_date', '')
+                        ))
+            except Exception as e:
+                logger.warning(f"宽松搜索失败: {e}")
         
         return result[:limit]
     
@@ -310,37 +379,3 @@ async def search_stocks(
     except Exception as e:
         logger.error(f"搜索股票失败: {e}")
         raise HTTPException(status_code=500, detail="搜索股票失败")
-
-
-def _get_mock_search_results(keyword: str, limit: int) -> List[StockSearchResponse]:
-    """获取模拟搜索结果"""
-    mock_stocks = [
-        {"symbol": "600519.SH", "name": "贵州茅台", "industry": "食品饮料", "area": "贵州"},
-        {"symbol": "000858.SZ", "name": "五粮液", "industry": "食品饮料", "area": "四川"},
-        {"symbol": "300750.SZ", "name": "宁德时代", "industry": "电池", "area": "福建"},
-        {"symbol": "000001.SZ", "name": "平安银行", "industry": "银行", "area": "广东"},
-        {"symbol": "600036.SH", "name": "招商银行", "industry": "银行", "area": "广东"},
-    ]
-    
-    # 根据关键词过滤
-    filtered = [
-        stock for stock in mock_stocks 
-        if keyword.lower() in stock["symbol"].lower() or keyword in stock["name"]
-    ]
-    
-    if not filtered:
-        # 如果没有匹配，返回前几个
-        filtered = mock_stocks[:limit]
-    
-    result = []
-    for stock in filtered[:limit]:
-        result.append(StockSearchResponse(
-            symbol=stock["symbol"],
-            name=stock["name"],
-            industry=stock.get("industry", ""),
-            area=stock.get("area", ""),
-            market="SH" if stock["symbol"].endswith(".SH") else "SZ",
-            listDate="20100101"
-        ))
-    
-    return result

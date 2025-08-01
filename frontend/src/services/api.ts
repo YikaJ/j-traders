@@ -122,9 +122,9 @@ export const marketApi = {
   },
 
   // 获取股票历史数据
-  getStockHistory: async (symbol: string, startDate?: string, endDate?: string) => {
-    const params = { symbol, start_date: startDate, end_date: endDate };
-    return api.get('/market/history', { params });
+  getStockHistory: async (symbol: string, days?: number) => {
+    const params = { days };
+    return api.get(`/market/history/${symbol}`, { params });
   },
 };
 

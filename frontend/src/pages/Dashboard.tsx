@@ -11,6 +11,7 @@ const Dashboard: React.FC = () => {
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [syncInfo, setSyncInfo] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
+  const [chartData, setChartData] = useState<{ dates: string[], prices: number[] }>({ dates: [], prices: [] });
 
   // 加载市场指数数据
   const loadMarketIndices = async () => {
@@ -47,6 +48,25 @@ const Dashboard: React.FC = () => {
           volume: 156700000
         }
       ]);
+    }
+  };
+
+  // 加载上证指数历史数据
+  const loadShanghaiIndexHistory = async () => {
+    try {
+      const historyData = await marketApi.getStockHistory('000001.SH', 30);
+      if (historyData && historyData.data && historyData.data.length > 0) {
+        const dates = historyData.data.map((item: any) => item.date);
+        const prices = historyData.data.map((item: any) => item.close);
+        setChartData({ dates, prices });
+      } else {
+        // 如果没有数据，使用空数组
+        setChartData({ dates: [], prices: [] });
+      }
+    } catch (error) {
+      console.error('获取上证指数历史数据失败:', error);
+      // 如果获取失败，使用空数组
+      setChartData({ dates: [], prices: [] });
     }
   };
 
@@ -88,7 +108,7 @@ const Dashboard: React.FC = () => {
   // 初始化数据加载
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
+      await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo(), loadShanghaiIndexHistory()]);
     };
     loadData();
   }, []);
@@ -96,7 +116,7 @@ const Dashboard: React.FC = () => {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadMarketIndices(), loadWatchlist()]);
+      await Promise.all([loadMarketIndices(), loadWatchlist(), loadShanghaiIndexHistory()]);
       message.success('数据刷新成功');
     } catch (error) {
       message.error('数据刷新失败');
@@ -188,24 +208,6 @@ const Dashboard: React.FC = () => {
       ),
     }
   ];
-
-  // 生成示例K线图数据
-  const generateChartData = () => {
-    const dates = [];
-    const prices = [];
-    const basePrice = 3200;
-    
-    for (let i = 30; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      dates.push(date.toISOString().split('T')[0]);
-      prices.push(basePrice + Math.random() * 100 - 50);
-    }
-    
-    return { dates, prices };
-  };
-
-  const { dates, prices } = generateChartData();
 
   return (
     <div>
@@ -333,8 +335,8 @@ const Dashboard: React.FC = () => {
             <Plot
               data={[
                 {
-                  x: dates,
-                  y: prices,
+                  x: chartData.dates,
+                  y: chartData.prices,
                   type: 'scatter',
                   mode: 'lines',
                   name: '上证指数',

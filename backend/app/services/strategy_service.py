@@ -257,48 +257,10 @@ class StrategyService:
             return stock_pool
         
         except Exception as e:
-            logger.warning(f"获取股票池失败，使用模拟数据: {e}")
-            return self._generate_mock_stock_pool()
+            logger.error(f"获取股票池失败: {e}")
+            raise ValueError(f"无法获取股票池: {e}")
     
-    def _generate_mock_stock_pool(self) -> List[Dict[str, Any]]:
-        """生成模拟股票池"""
-        import random
-        
-        mock_stocks = [
-            ("000001.SZ", "平安银行", "银行", "深圳"),
-            ("000002.SZ", "万科A", "房地产", "深圳"),
-            ("600036.SH", "招商银行", "银行", "上海"),
-            ("600519.SH", "贵州茅台", "食品饮料", "贵州"),
-            ("000858.SZ", "五粮液", "食品饮料", "四川"),
-            ("600276.SH", "恒瑞医药", "医药生物", "江苏"),
-            ("000063.SZ", "中兴通讯", "通信", "广东"),
-            ("002415.SZ", "海康威视", "电子", "浙江"),
-            ("300059.SZ", "东方财富", "非银金融", "上海"),
-            ("002594.SZ", "比亚迪", "汽车", "广东")
-        ]
-        
-        stock_pool = []
-        for symbol, name, industry, area in mock_stocks:
-            # 生成模拟交易数据
-            base_price = random.uniform(10, 200)
-            stock_pool.append({
-                'symbol': symbol,
-                'name': name,
-                'industry': industry,
-                'area': area,
-                'latest_data': type('MockData', (), {
-                    'symbol': symbol,
-                    'close': base_price,
-                    'total_mv': random.uniform(1000000, 50000000),
-                    'pe_ttm': random.uniform(5, 50),
-                    'pb': random.uniform(0.5, 5),
-                    'turnover_rate': random.uniform(0.1, 10),
-                    'vol': random.randint(100000, 5000000),
-                    'amount': random.uniform(1000000, 100000000)
-                })()
-            })
-        
-        return stock_pool
+
     
     async def _calculate_factor_values(
         self,
@@ -407,63 +369,24 @@ class StrategyService:
                 df = df.set_index('trade_date').sort_index()
                 return df
             
-            # 如果没有数据，生成模拟数据
-            return self._generate_mock_historical_data(symbol, start_date, end_date)
+            # 如果没有数据，尝试从Tushare获取
+            try:
+                from app.services.tushare_service import tushare_service
+                daily_df = await tushare_service.get_stock_daily(symbol, start_date, end_date)
+                if not daily_df.empty:
+                    # 转换为标准格式
+                    daily_df = daily_df.set_index('trade_date').sort_index()
+                    return daily_df
+            except Exception as e:
+                logger.warning(f"从Tushare获取{symbol}数据失败: {e}")
+            
+            return pd.DataFrame()
         
         except Exception as e:
             logger.warning(f"获取{symbol}历史数据失败: {e}")
             return pd.DataFrame()
     
-    def _generate_mock_historical_data(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """生成模拟历史数据"""
-        import random
-        
-        try:
-            start = datetime.strptime(start_date, '%Y%m%d')
-            end = datetime.strptime(end_date, '%Y%m%d')
-            
-            dates = []
-            current = start
-            while current <= end:
-                # 只包含工作日
-                if current.weekday() < 5:
-                    dates.append(current)
-                current += timedelta(days=1)
-            
-            if not dates:
-                return pd.DataFrame()
-            
-            # 生成价格数据
-            base_price = random.uniform(10, 100)
-            data = []
-            
-            for date in dates:
-                # 模拟价格波动
-                change = random.uniform(-0.05, 0.05)
-                base_price *= (1 + change)
-                base_price = max(base_price, 1.0)  # 防止价格过低
-                
-                data.append({
-                    'trade_date': date,
-                    'open': round(base_price * random.uniform(0.98, 1.02), 2),
-                    'high': round(base_price * random.uniform(1.0, 1.05), 2),
-                    'low': round(base_price * random.uniform(0.95, 1.0), 2),
-                    'close': round(base_price, 2),
-                    'volume': random.randint(100000, 5000000),
-                    'amount': random.uniform(1000000, 50000000),
-                    'pe_ttm': random.uniform(5, 50),
-                    'pb': random.uniform(0.5, 5),
-                    'total_mv': random.uniform(1000000, 100000000),
-                    'circ_mv': random.uniform(500000, 50000000)
-                })
-            
-            df = pd.DataFrame(data)
-            df = df.set_index('trade_date').sort_index()
-            return df
-        
-        except Exception as e:
-            logger.error(f"生成模拟数据失败: {e}")
-            return pd.DataFrame()
+
     
     async def _execute_single_factor(self, factor_code: str, data: pd.DataFrame) -> float:
         """执行单个因子计算"""

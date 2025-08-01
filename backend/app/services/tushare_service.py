@@ -144,30 +144,39 @@ class TushareService:
         """
         def _fetch():
             try:
-                # 主要指数代码
+                # 主要指数代码，只返回主要的指数
                 indices = [
                     '000001.SH',  # 上证指数
                     '399001.SZ',  # 深证成指
                     '399006.SZ',  # 创业板指
                     '000300.SH',  # 沪深300
-                    '000905.SH',  # 中证500
-                    '399905.SZ',  # 中证500
+                    '000905.SH',  # 中证500 (只保留一个)
                 ]
                 
                 all_data = []
                 for index_code in indices:
                     try:
                         if self.pro:
+                            # 获取指数日线数据
                             df = self.pro.index_daily(
                                 ts_code=index_code,
                                 trade_date=trade_date,
                                 limit=1
                             )
+                            
+                            # 如果没有指定日期，获取最新数据
+                            if df.empty and not trade_date:
+                                df = self.pro.index_daily(
+                                    ts_code=index_code,
+                                    limit=1
+                                )
                         else:
                             # 免费接口处理
                             df = pd.DataFrame()  # 免费接口限制较多
                         
                         if not df.empty:
+                            # 添加指数名称
+                            df['index_name'] = self._get_index_name(index_code)
                             all_data.append(df)
                         
                         # API限制，添加延时
@@ -184,6 +193,49 @@ class TushareService:
                     return pd.DataFrame()
             except Exception as e:
                 logger.error(f"获取市场指数数据失败: {e}")
+                return pd.DataFrame()
+        
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.executor, _fetch)
+    
+    async def get_index_history(self, symbol: str, start_date: Optional[str] = None, end_date: Optional[str] = None, limit: int = 30) -> pd.DataFrame:
+        """
+        获取指数历史数据
+        
+        Args:
+            symbol: 指数代码
+            start_date: 开始日期 YYYYMMDD
+            end_date: 结束日期 YYYYMMDD
+            limit: 数据条数限制
+        
+        Returns:
+            指数历史数据DataFrame
+        """
+        def _fetch():
+            try:
+                if self.pro:
+                    # 使用pro接口获取指数历史数据
+                    df = self.pro.index_daily(
+                        ts_code=symbol,
+                        start_date=start_date,
+                        end_date=end_date,
+                        limit=limit
+                    )
+                    
+                    if not df.empty:
+                        # 添加指数名称
+                        df['index_name'] = self._get_index_name(symbol)
+                        logger.info(f"获取{symbol}历史数据成功，共{len(df)}条")
+                        return df
+                    else:
+                        logger.warning(f"未获取到{symbol}的历史数据")
+                        return pd.DataFrame()
+                else:
+                    # 免费接口限制较多
+                    logger.warning("免费接口不支持指数历史数据获取")
+                    return pd.DataFrame()
+            except Exception as e:
+                logger.error(f"获取{symbol}历史数据失败: {e}")
                 return pd.DataFrame()
         
         loop = asyncio.get_event_loop()
@@ -219,6 +271,32 @@ class TushareService:
                 if self.pro:
                     # 批量获取实时数据
                     df = self.pro.realtime_quote(ts_code=','.join(ts_codes))
+                    
+                    # 如果实时数据获取失败，尝试获取最新日线数据
+                    if df.empty:
+                        logger.warning("实时数据获取失败，尝试获取最新日线数据")
+                        all_data = []
+                        for ts_code in ts_codes:
+                            try:
+                                daily_df = self.pro.daily(ts_code=ts_code, limit=1)
+                                if not daily_df.empty:
+                                    # 转换为实时数据格式
+                                    daily_df['code'] = daily_df['ts_code']
+                                    daily_df['name'] = daily_df['ts_code']  # 需要从股票基础信息获取
+                                    daily_df['price'] = daily_df['close']
+                                    daily_df['change'] = daily_df['change']
+                                    daily_df['changepercent'] = daily_df['pct_chg']
+                                    daily_df['volume'] = daily_df['vol']
+                                    daily_df['amount'] = daily_df['amount']
+                                    all_data.append(daily_df)
+                                
+                                time.sleep(0.1)
+                            except Exception as e:
+                                logger.warning(f"获取{ts_code}数据失败: {e}")
+                                continue
+                        
+                        if all_data:
+                            df = pd.concat(all_data, ignore_index=True)
                 else:
                     # 使用免费接口
                     df = ts.get_realtime_quotes(ts_codes)
@@ -306,6 +384,18 @@ class TushareService:
         
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(self.executor, _fetch)
+    
+    def _get_index_name(self, symbol: str) -> str:
+        """获取指数中文名称"""
+        index_names = {
+            "000001.SH": "上证指数",
+            "399001.SZ": "深证成指",
+            "399006.SZ": "创业板指",
+            "000300.SH": "沪深300",
+            "000905.SH": "中证500",
+            "399905.SZ": "中证500"
+        }
+        return index_names.get(symbol, symbol)
     
     def is_trade_day(self, date: str) -> bool:
         """
