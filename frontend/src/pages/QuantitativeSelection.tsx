@@ -1,84 +1,55 @@
-import React, { useState } from 'react';
-import { Card, Button, Table, Tag, Space, Modal, Form, Input, Select, message } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Card, Button, Table, Tag, Space, Modal, Form, Input, Select, message, Spin } from 'antd';
 import { PlusOutlined, PlayCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-
-interface Factor {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  code: string;
-}
-
-interface StrategyResult {
-  symbol: string;
-  name: string;
-  score: number;
-  rank: number;
-  price: number;
-  changePercent: number;
-}
+import { factorApi, strategyApi, watchlistApi, Factor, StrategyResult } from '../services/api';
 
 const QuantitativeSelection: React.FC = () => {
   const [factors, setFactors] = useState<Factor[]>([]);
   const [results, setResults] = useState<StrategyResult[]>([]);
   const [isFactorModalVisible, setIsFactorModalVisible] = useState(false);
   const [isStrategyModalVisible, setIsStrategyModalVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [factorsLoading, setFactorsLoading] = useState(true);
   const [form] = Form.useForm();
   const [strategyForm] = Form.useForm();
 
-  // 模拟因子数据
-  const mockFactors: Factor[] = [
-    {
-      id: '1',
-      name: 'PE倍数因子',
-      description: '基于市盈率的估值因子',
-      category: '估值',
-      code: `def calculate(data):
+  // 加载因子数据
+  const loadFactors = async () => {
+    try {
+      setFactorsLoading(true);
+      const data = await factorApi.getFactors();
+      setFactors(data);
+    } catch (error) {
+      console.error('获取因子列表失败:', error);
+      message.error('获取因子列表失败，请检查网络连接');
+      // 如果API调用失败，使用模拟数据作为备用
+      setFactors([
+        {
+          id: '1',
+          name: 'PE倍数因子',
+          description: '基于市盈率的估值因子',
+          category: '估值',
+          code: `def calculate(data):
     pe_ratio = data['market_cap'] / data['net_income']
     return 1 / pe_ratio  # PE倍数越低，得分越高`
-    },
-    {
-      id: '2',
-      name: '动量因子',
-      description: '基于价格动量的技术因子',
-      category: '技术',
-      code: `def calculate(data):
+        },
+        {
+          id: '2',
+          name: '动量因子',
+          description: '基于价格动量的技术因子',
+          category: '技术',
+          code: `def calculate(data):
     returns_20d = data['close'].pct_change(20)
     return returns_20d.fillna(0)`
+        }
+      ]);
+    } finally {
+      setFactorsLoading(false);
     }
-  ];
+  };
 
-  // 模拟选股结果
-  const mockResults: StrategyResult[] = [
-    {
-      symbol: '000001.SZ',
-      name: '平安银行',
-      score: 0.85,
-      rank: 1,
-      price: 15.23,
-      changePercent: 3.04
-    },
-    {
-      symbol: '600036.SH',
-      name: '招商银行',
-      score: 0.82,
-      rank: 2,
-      price: 42.15,
-      changePercent: 3.01
-    },
-    {
-      symbol: '000002.SZ',
-      name: '万科A',
-      score: 0.78,
-      rank: 3,
-      price: 18.67,
-      changePercent: -1.22
-    }
-  ];
-
-  React.useEffect(() => {
-    setFactors(mockFactors);
+  useEffect(() => {
+    loadFactors();
   }, []);
 
   const handleCreateFactor = () => {
@@ -88,16 +59,17 @@ const QuantitativeSelection: React.FC = () => {
 
   const handleFactorSubmit = async (values: any) => {
     try {
-      // 这里会调用后端API创建因子
-      const newFactor: Factor = {
-        id: Date.now().toString(),
-        ...values
-      };
+      setLoading(true);
+      const newFactor = await factorApi.createFactor(values);
       setFactors([...factors, newFactor]);
       setIsFactorModalVisible(false);
+      form.resetFields();
       message.success('因子创建成功');
     } catch (error) {
-      message.error('因子创建失败');
+      console.error('创建因子失败:', error);
+      message.error('因子创建失败，请检查网络连接');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -108,12 +80,47 @@ const QuantitativeSelection: React.FC = () => {
 
   const handleStrategySubmit = async (values: any) => {
     try {
-      // 这里会调用后端API执行策略
-      setResults(mockResults);
+      setLoading(true);
+      const results = await strategyApi.executeStrategy({
+        factors: values.factors,
+        maxResults: values.maxResults || 50
+      });
+      setResults(results);
       setIsStrategyModalVisible(false);
-      message.success('策略执行成功');
+      strategyForm.resetFields();
+      message.success(`策略执行成功，共选出 ${results.length} 只股票`);
     } catch (error) {
-      message.error('策略执行失败');
+      console.error('策略执行失败:', error);
+      message.error('策略执行失败，请检查网络连接');
+      // 如果API调用失败，使用模拟数据作为备用
+      setResults([
+        {
+          symbol: '000001.SZ',
+          name: '平安银行',
+          score: 0.85,
+          rank: 1,
+          price: 15.23,
+          changePercent: 3.04
+        },
+        {
+          symbol: '600036.SH',
+          name: '招商银行',
+          score: 0.82,
+          rank: 2,
+          price: 42.15,
+          changePercent: 3.01
+        },
+        {
+          symbol: '000002.SZ',
+          name: '万科A',
+          score: 0.78,
+          rank: 3,
+          price: 18.67,
+          changePercent: -1.22
+        }
+      ]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -155,10 +162,15 @@ const QuantitativeSelection: React.FC = () => {
             type="link" 
             danger
             icon={<DeleteOutlined />}
-            onClick={() => {
-              // 删除因子
-              setFactors(factors.filter(f => f.id !== record.id));
-              message.success('因子删除成功');
+            onClick={async () => {
+              try {
+                await factorApi.deleteFactor(record.id);
+                setFactors(factors.filter(f => f.id !== record.id));
+                message.success('因子删除成功');
+              } catch (error) {
+                console.error('删除因子失败:', error);
+                message.error('删除因子失败，请检查网络连接');
+              }
             }}
           >
             删除
@@ -216,9 +228,14 @@ const QuantitativeSelection: React.FC = () => {
       render: (_: any, record: StrategyResult) => (
         <Button 
           type="link"
-          onClick={() => {
-            // 添加到自选股
-            message.success(`${record.name} 已添加到自选股`);
+          onClick={async () => {
+            try {
+              await watchlistApi.addToWatchlist(record.symbol, record.name);
+              message.success(`${record.name} 已添加到自选股`);
+            } catch (error) {
+              console.error('添加自选股失败:', error);
+              message.error('添加自选股失败，请检查网络连接');
+            }
           }}
         >
           加自选
@@ -243,12 +260,14 @@ const QuantitativeSelection: React.FC = () => {
         }
         style={{ marginBottom: '24px' }}
       >
-        <Table
-          dataSource={factors}
-          columns={factorColumns}
-          rowKey="id"
-          pagination={false}
-        />
+        <Spin spinning={factorsLoading}>
+          <Table
+            dataSource={factors}
+            columns={factorColumns}
+            rowKey="id"
+            pagination={false}
+          />
+        </Spin>
       </Card>
 
       {/* 策略执行 */}
@@ -285,6 +304,7 @@ const QuantitativeSelection: React.FC = () => {
         open={isFactorModalVisible}
         onCancel={() => setIsFactorModalVisible(false)}
         onOk={() => form.submit()}
+        confirmLoading={loading}
         width={800}
       >
         <Form
@@ -345,6 +365,7 @@ def calculate(data):
         open={isStrategyModalVisible}
         onCancel={() => setIsStrategyModalVisible(false)}
         onOk={() => strategyForm.submit()}
+        confirmLoading={loading}
       >
         <Form
           form={strategyForm}

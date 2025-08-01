@@ -1,16 +1,7 @@
-import React, { useState } from 'react';
-import { Card, Table, Button, Space, Modal, Form, Input, Tag, message, Popconfirm } from 'antd';
-import { PlusOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
-
-interface WatchlistStock {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  addedAt: string;
-  notes?: string;
-}
+import React, { useState, useEffect } from 'react';
+import { Card, Table, Button, Space, Modal, Form, Input, Tag, message, Popconfirm, Spin } from 'antd';
+import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { watchlistApi, marketApi, WatchlistStock } from '../services/api';
 
 interface SearchStock {
   symbol: string;
@@ -24,101 +15,127 @@ const Watchlist: React.FC = () => {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchStock[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [form] = Form.useForm();
 
-  // 模拟自选股数据
-  const mockWatchlist: WatchlistStock[] = [
-    {
-      symbol: '000001.SZ',
-      name: '平安银行',
-      price: 15.23,
-      change: 0.45,
-      changePercent: 3.04,
-      addedAt: '2024-01-15',
-      notes: '银行股龙头'
-    },
-    {
-      symbol: '000002.SZ',
-      name: '万科A',
-      price: 18.67,
-      change: -0.23,
-      changePercent: -1.22,
-      addedAt: '2024-01-14',
-      notes: '地产行业'
-    },
-    {
-      symbol: '600036.SH',
-      name: '招商银行',
-      price: 42.15,
-      change: 1.23,
-      changePercent: 3.01,
-      addedAt: '2024-01-13'
+  // 加载自选股数据
+  const loadWatchlist = async () => {
+    try {
+      const data = await watchlistApi.getWatchlist();
+      setWatchlist(data);
+    } catch (error) {
+      console.error('获取自选股失败:', error);
+      message.error('获取自选股失败，请检查网络连接');
+      // 如果API调用失败，使用模拟数据作为备用
+      setWatchlist([
+        {
+          symbol: '000001.SZ',
+          name: '平安银行',
+          price: 15.23,
+          change: 0.45,
+          changePercent: 3.04,
+          addedAt: '2024-01-15'
+        },
+        {
+          symbol: '000002.SZ',
+          name: '万科A',
+          price: 18.67,
+          change: -0.23,
+          changePercent: -1.22,
+          addedAt: '2024-01-14'
+        },
+        {
+          symbol: '600036.SH',
+          name: '招商银行',
+          price: 42.15,
+          change: 1.23,
+          changePercent: 3.01,
+          addedAt: '2024-01-13'
+        }
+      ]);
     }
-  ];
+  };
 
-  // 模拟搜索结果
-  const mockSearchResults: SearchStock[] = [
-    {
-      symbol: '600519.SH',
-      name: '贵州茅台',
-      price: 1678.50,
-      changePercent: 2.15
-    },
-    {
-      symbol: '000858.SZ',
-      name: '五粮液',
-      price: 145.32,
-      changePercent: -0.85
-    },
-    {
-      symbol: '300750.SZ',
-      name: '宁德时代',
-      price: 198.45,
-      changePercent: 1.25
-    }
-  ];
-
-  React.useEffect(() => {
-    setWatchlist(mockWatchlist);
+  useEffect(() => {
+    const loadData = async () => {
+      setDataLoading(true);
+      await loadWatchlist();
+      setDataLoading(false);
+    };
+    loadData();
   }, []);
 
   const handleSearch = async (keyword: string) => {
     if (!keyword) return;
     
     setSearchLoading(true);
-    // 模拟API搜索
-    setTimeout(() => {
+    try {
+      // 这里可以调用股票搜索API，暂时使用模拟数据
+      const mockSearchResults: SearchStock[] = [
+        {
+          symbol: '600519.SH',
+          name: '贵州茅台',
+          price: 1678.50,
+          changePercent: 2.15
+        },
+        {
+          symbol: '000858.SZ',
+          name: '五粮液',
+          price: 145.32,
+          changePercent: -0.85
+        },
+        {
+          symbol: '300750.SZ',
+          name: '宁德时代',
+          price: 198.45,
+          changePercent: 1.25
+        }
+      ];
+      
       const filtered = mockSearchResults.filter(
         stock => stock.name.includes(keyword) || stock.symbol.includes(keyword)
       );
       setSearchResults(filtered);
+    } catch (error) {
+      console.error('搜索股票失败:', error);
+      message.error('搜索股票失败，请检查网络连接');
+    } finally {
       setSearchLoading(false);
-    }, 500);
-  };
-
-  const handleAddStock = (stock: SearchStock, notes?: string) => {
-    const newStock: WatchlistStock = {
-      ...stock,
-      change: stock.price * (stock.changePercent / 100),
-      addedAt: new Date().toISOString().split('T')[0],
-      notes: notes || ''
-    };
-
-    // 检查是否已存在
-    if (watchlist.some(item => item.symbol === stock.symbol)) {
-      message.warning('该股票已在自选股中');
-      return;
     }
-
-    setWatchlist([...watchlist, newStock]);
-    message.success(`${stock.name} 已添加到自选股`);
-    setIsAddModalVisible(false);
-    form.resetFields();
   };
 
-  const handleRemoveStock = (symbol: string) => {
-    setWatchlist(watchlist.filter(stock => stock.symbol !== symbol));
-    message.success('已从自选股中移除');
+  const handleAddStock = async (stock: SearchStock, notes?: string) => {
+    try {
+      // 检查是否已存在
+      if (watchlist.some(item => item.symbol === stock.symbol)) {
+        message.warning('该股票已在自选股中');
+        return;
+      }
+
+      setLoading(true);
+      const newStock = await watchlistApi.addToWatchlist(stock.symbol, stock.name);
+      setWatchlist([...watchlist, newStock]);
+      message.success(`${stock.name} 已添加到自选股`);
+      setIsAddModalVisible(false);
+      form.resetFields();
+    } catch (error) {
+      console.error('添加自选股失败:', error);
+      message.error('添加自选股失败，请检查网络连接');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveStock = async (id: number, symbol: string, name: string) => {
+    try {
+      await watchlistApi.removeFromWatchlist(id);
+      setWatchlist(watchlist.filter(stock => stock.id !== id));
+      message.success(`${name} 已从自选股中移除`);
+    } catch (error) {
+      console.error('删除自选股失败:', error);
+      message.error('删除自选股失败，请检查网络连接');
+    }
   };
 
   const watchlistColumns = [
@@ -194,7 +211,7 @@ const Watchlist: React.FC = () => {
           </Button>
           <Popconfirm
             title="确定要移除这只股票吗？"
-            onConfirm={() => handleRemoveStock(record.symbol)}
+            onConfirm={() => handleRemoveStock(record.id || 0, record.symbol, record.name)}
             okText="确定"
             cancelText="取消"
           >
@@ -258,27 +275,43 @@ const Watchlist: React.FC = () => {
       <Card 
         title={`自选股 (${watchlist.length})`}
         extra={
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            onClick={() => setIsAddModalVisible(true)}
-          >
-            添加股票
-          </Button>
+          <Space>
+            <Button 
+              icon={<ReloadOutlined />}
+              onClick={async () => {
+                setDataLoading(true);
+                await loadWatchlist();
+                setDataLoading(false);
+                message.success('数据刷新成功');
+              }}
+              loading={dataLoading}
+            >
+              刷新
+            </Button>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />}
+              onClick={() => setIsAddModalVisible(true)}
+            >
+              添加股票
+            </Button>
+          </Space>
         }
       >
-        <Table
-          dataSource={watchlist}
-          columns={watchlistColumns}
-          rowKey="symbol"
-          pagination={{ 
-            pageSize: 20,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 只股票`
-          }}
-          scroll={{ x: 800 }}
-        />
+        <Spin spinning={dataLoading}>
+          <Table
+            dataSource={watchlist}
+            columns={watchlistColumns}
+            rowKey="symbol"
+            pagination={{ 
+              pageSize: 20,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 只股票`
+            }}
+                      scroll={{ x: 800 }}
+          />
+        </Spin>
       </Card>
 
       {/* 添加股票弹窗 */}

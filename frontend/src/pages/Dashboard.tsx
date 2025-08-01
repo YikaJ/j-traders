@@ -1,95 +1,108 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Space, Button } from 'antd';
+import { Card, Row, Col, Statistic, Table, Tag, Space, Button, message } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons';
 import Plot from 'react-plotly.js';
-
-// 模拟数据接口
-interface MarketIndex {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume: number;
-}
-
-interface WatchlistStock {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-}
+import { marketApi, watchlistApi, MarketIndex, WatchlistStock } from '../services/api';
 
 const Dashboard: React.FC = () => {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
 
-  // 模拟数据
-  const mockIndices: MarketIndex[] = [
-    {
-      symbol: '000001.SH',
-      name: '上证指数',
-      price: 3245.12,
-      change: 15.43,
-      changePercent: 0.48,
-      volume: 245600000
-    },
-    {
-      symbol: '399001.SZ',
-      name: '深证成指',
-      price: 10234.56,
-      change: -23.45,
-      changePercent: -0.23,
-      volume: 189400000
-    },
-    {
-      symbol: '399006.SZ',
-      name: '创业板指',
-      price: 2156.78,
-      change: 8.92,
-      changePercent: 0.42,
-      volume: 156700000
+  // 加载市场指数数据
+  const loadMarketIndices = async () => {
+    try {
+      const data = await marketApi.getMarketIndices();
+      setIndices(data);
+    } catch (error) {
+      console.error('获取市场指数失败:', error);
+      message.error('获取市场指数失败，请检查网络连接');
+      // 如果API调用失败，使用模拟数据作为备用
+      setIndices([
+        {
+          symbol: '000001.SH',
+          name: '上证指数',
+          price: 3245.12,
+          change: 15.43,
+          changePercent: 0.48,
+          volume: 245600000
+        },
+        {
+          symbol: '399001.SZ',
+          name: '深证成指',
+          price: 10234.56,
+          change: -23.45,
+          changePercent: -0.23,
+          volume: 189400000
+        },
+        {
+          symbol: '399006.SZ',
+          name: '创业板指',
+          price: 2156.78,
+          change: 8.92,
+          changePercent: 0.42,
+          volume: 156700000
+        }
+      ]);
     }
-  ];
+  };
 
-  const mockWatchlist: WatchlistStock[] = [
-    {
-      symbol: '000001.SZ',
-      name: '平安银行',
-      price: 15.23,
-      change: 0.45,
-      changePercent: 3.04
-    },
-    {
-      symbol: '000002.SZ',
-      name: '万科A',
-      price: 18.67,
-      change: -0.23,
-      changePercent: -1.22
-    },
-    {
-      symbol: '600036.SH',
-      name: '招商银行',
-      price: 42.15,
-      change: 1.23,
-      changePercent: 3.01
+  // 加载自选股数据
+  const loadWatchlist = async () => {
+    try {
+      const data = await watchlistApi.getWatchlist();
+      setWatchlist(data);
+    } catch (error) {
+      console.error('获取自选股失败:', error);
+      message.error('获取自选股失败，请检查网络连接');
+      // 如果API调用失败，使用模拟数据作为备用
+      setWatchlist([
+        {
+          symbol: '000001.SZ',
+          name: '平安银行',
+          price: 15.23,
+          change: 0.45,
+          changePercent: 3.04
+        },
+        {
+          symbol: '000002.SZ',
+          name: '万科A',
+          price: 18.67,
+          change: -0.23,
+          changePercent: -1.22
+        },
+        {
+          symbol: '600036.SH',
+          name: '招商银行',
+          price: 42.15,
+          change: 1.23,
+          changePercent: 3.01
+        }
+      ]);
     }
-  ];
+  };
 
+  // 初始化数据加载
   useEffect(() => {
-    // 模拟数据加载
-    setIndices(mockIndices);
-    setWatchlist(mockWatchlist);
+    const loadData = async () => {
+      setDataLoading(true);
+      await Promise.all([loadMarketIndices(), loadWatchlist()]);
+      setDataLoading(false);
+    };
+    loadData();
   }, []);
 
   const handleRefresh = async () => {
     setLoading(true);
-    // 模拟API调用
-    setTimeout(() => {
+    try {
+      await Promise.all([loadMarketIndices(), loadWatchlist()]);
+      message.success('数据刷新成功');
+    } catch (error) {
+      message.error('数据刷新失败');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const watchlistColumns = [
