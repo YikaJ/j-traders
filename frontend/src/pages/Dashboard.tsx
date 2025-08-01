@@ -8,7 +8,6 @@ const Dashboard: React.FC = () => {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dataLoading, setDataLoading] = useState(true);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
   const [syncInfo, setSyncInfo] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
@@ -89,9 +88,7 @@ const Dashboard: React.FC = () => {
   // 初始化数据加载
   useEffect(() => {
     const loadData = async () => {
-      setDataLoading(true);
       await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
-      setDataLoading(false);
     };
     loadData();
   }, []);
@@ -124,7 +121,7 @@ const Dashboard: React.FC = () => {
     setSyncing(true);
     try {
       const result = await stockApi.syncStockData();
-      message.success(`同步完成！新增 ${result.new_stocks} 只股票，更新 ${result.updated_stocks} 只股票`);
+      message.success(`同步完成！新增 ${result.new_stocks || 0} 只股票，更新 ${result.updated_stocks || 0} 只股票`);
       await loadSyncInfo(); // 重新加载同步信息
     } catch (error) {
       console.error('股票数据同步失败:', error);
@@ -155,15 +152,15 @@ const Dashboard: React.FC = () => {
       title: '现价',
       dataIndex: 'price',
       key: 'price',
-      render: (price: number) => `¥${price.toFixed(2)}`,
+      render: (price: number) => `¥${(price || 0).toFixed(2)}`,
     },
     {
       title: '涨跌',
       dataIndex: 'change',
       key: 'change',
       render: (change: number) => (
-        <span style={{ color: change >= 0 ? '#f5222d' : '#52c41a' }}>
-          {change >= 0 ? '+' : ''}{change.toFixed(2)}
+        <span style={{ color: (change || 0) >= 0 ? '#f5222d' : '#52c41a' }}>
+          {(change || 0) >= 0 ? '+' : ''}{(change || 0).toFixed(2)}
         </span>
       ),
     },
@@ -172,8 +169,8 @@ const Dashboard: React.FC = () => {
       dataIndex: 'changePercent',
       key: 'changePercent',
       render: (changePercent: number) => (
-        <Tag color={changePercent >= 0 ? 'red' : 'green'}>
-          {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+        <Tag color={(changePercent || 0) >= 0 ? 'red' : 'green'}>
+          {(changePercent || 0) >= 0 ? '+' : ''}{(changePercent || 0).toFixed(2)}%
         </Tag>
       ),
     }
@@ -206,21 +203,21 @@ const Dashboard: React.FC = () => {
             <Card>
               <Statistic
                 title={index.name}
-                value={index.price}
+                value={index.price || 0}
                 precision={2}
                 valueStyle={{ 
-                  color: index.change >= 0 ? '#f5222d' : '#52c41a',
+                  color: (index.change || 0) >= 0 ? '#f5222d' : '#52c41a',
                   fontSize: '24px'
                 }}
-                prefix={index.change >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
+                prefix={(index.change || 0) >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
                 suffix={
                   <div style={{ fontSize: '14px', marginTop: '8px' }}>
                     <div>
-                      {index.change >= 0 ? '+' : ''}{index.change.toFixed(2)} 
-                      ({index.change >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%)
+                      {(index.change || 0) >= 0 ? '+' : ''}{(index.change || 0).toFixed(2)} 
+                      ({(index.changePercent || 0) >= 0 ? '+' : ''}{(index.changePercent || 0).toFixed(2)}%)
                     </div>
                     <div style={{ color: '#666', fontSize: '12px' }}>
-                      成交量: {(index.volume / 100000000).toFixed(2)}亿
+                      成交量: {((index.volume || 0) / 100000000).toFixed(2)}亿
                     </div>
                   </div>
                 }
@@ -322,8 +319,8 @@ const Dashboard: React.FC = () => {
                 width: undefined,
                 height: 300,
                 margin: { l: 50, r: 50, t: 20, b: 50 },
-                xaxis: { title: '日期' },
-                yaxis: { title: '点数' },
+                xaxis: { title: { text: '日期' } },
+                yaxis: { title: { text: '点数' } },
                 showlegend: false
               }}
               config={{ responsive: true }}

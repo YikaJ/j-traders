@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Tag, message, Popconfirm, Spin } from 'antd';
 import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
-import { watchlistApi, marketApi, stockApi, WatchlistStock } from '../services/api';
+import { watchlistApi, stockApi, WatchlistStock } from '../services/api';
 
 interface SearchStock {
   symbol: string;
@@ -16,7 +16,6 @@ const Watchlist: React.FC = () => {
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchStock[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [form] = Form.useForm();
 
@@ -86,7 +85,7 @@ const Watchlist: React.FC = () => {
     }
   };
 
-  const handleAddStock = async (stock: SearchStock, notes?: string) => {
+  const handleAddStock = async (stock: SearchStock) => {
     try {
       // 检查是否已存在
       if (watchlist.some(item => item.symbol === stock.symbol)) {
@@ -94,7 +93,6 @@ const Watchlist: React.FC = () => {
         return;
       }
 
-      setLoading(true);
       const newStock = await watchlistApi.addToWatchlist(stock.symbol, stock.name);
       setWatchlist([...watchlist, newStock]);
       message.success(`${stock.name} 已添加到自选股`);
@@ -104,12 +102,10 @@ const Watchlist: React.FC = () => {
     } catch (error) {
       console.error('添加自选股失败:', error);
       message.error('添加自选股失败，请检查网络连接');
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleRemoveStock = async (id: number, symbol: string, name: string) => {
+  const handleRemoveStock = async (id: number, name: string) => {
     try {
       await watchlistApi.removeFromWatchlist(id);
       setWatchlist(watchlist.filter(stock => stock.id !== id));
@@ -138,16 +134,16 @@ const Watchlist: React.FC = () => {
       dataIndex: 'price',
       key: 'price',
       width: 100,
-      render: (price: number) => `¥${price.toFixed(2)}`,
+      render: (price: number) => `¥${(price || 0).toFixed(2)}`,
     },
-    {
+    { 
       title: '涨跌',
       dataIndex: 'change',
       key: 'change',
       width: 80,
       render: (change: number) => (
-        <span style={{ color: change >= 0 ? '#f5222d' : '#52c41a' }}>
-          {change >= 0 ? '+' : ''}{change.toFixed(2)}
+        <span style={{ color: (change || 0) >= 0 ? '#f5222d' : '#52c41a' }}>
+          {(change || 0) >= 0 ? '+' : ''}{(change || 0).toFixed(2)}
         </span>
       ),
     },
@@ -157,8 +153,8 @@ const Watchlist: React.FC = () => {
       key: 'changePercent',
       width: 100,
       render: (changePercent: number) => (
-        <Tag color={changePercent >= 0 ? 'red' : 'green'}>
-          {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+        <Tag color={(changePercent || 0) >= 0 ? 'red' : 'green'}>
+          {(changePercent || 0) >= 0 ? '+' : ''}{(changePercent || 0).toFixed(2)}%
         </Tag>
       ),
     },
@@ -193,7 +189,7 @@ const Watchlist: React.FC = () => {
           </Button>
           <Popconfirm
             title="确定要移除这只股票吗？"
-            onConfirm={() => handleRemoveStock(record.id || 0, record.symbol, record.name)}
+            onConfirm={() => handleRemoveStock(record.id || 0, record.name)}
             okText="确定"
             cancelText="取消"
           >
@@ -297,7 +293,7 @@ const Watchlist: React.FC = () => {
               showQuickJumper: true,
               showTotal: (total) => `共 ${total} 只股票`
             }}
-                      scroll={{ x: 800 }}
+            scroll={{ x: 800 }}
           />
         </Spin>
       </Card>

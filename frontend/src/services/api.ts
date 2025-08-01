@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://localhost:8001/api/v1',
+  baseURL: 'http://localhost:8000/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -79,6 +79,20 @@ export interface WatchlistStock {
   change: number;
   changePercent: number;
   addedAt?: string;
+}
+
+export interface SearchStock {
+  symbol: string;
+  name: string;
+  industry?: string;
+  area?: string;
+  market?: string;
+}
+
+export interface SyncResult {
+  new_stocks: number;
+  updated_stocks: number;
+  message: string;
 }
 
 // 市场数据API
@@ -183,7 +197,7 @@ export const watchlistApi = {
 // 股票数据管理API
 export const stockApi = {
   // 搜索股票
-  searchStocks: async (keyword: string, limit: number = 20) => {
+  searchStocks: async (keyword: string, limit: number = 20): Promise<SearchStock[]> => {
     const params = { q: keyword, limit };
     return api.get('/stocks/search', { params });
   },
@@ -194,7 +208,7 @@ export const stockApi = {
   },
 
   // 同步股票数据
-  syncStockData: async () => {
+  syncStockData: async (): Promise<SyncResult> => {
     return api.post('/stocks/sync');
   },
 

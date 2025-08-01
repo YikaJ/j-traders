@@ -210,7 +210,7 @@ const QuantitativeSelection: React.FC = () => {
       title: '现价',
       dataIndex: 'price',
       key: 'price',
-      render: (price: number) => `¥${price.toFixed(2)}`,
+      render: (price: number) => `¥${price?.toFixed(2)}`,  
     },
     {
       title: '涨跌幅',
