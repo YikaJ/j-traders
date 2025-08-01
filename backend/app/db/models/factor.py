@@ -146,3 +146,156 @@ class FactorValue(Base):
     
     def __repr__(self):
         return f"<FactorValue(factor_id={self.factor_id}, symbol='{self.symbol}', value={self.value})>"
+
+
+# =============================================================================
+# 新增：内置因子库和策略配置增强模型
+# =============================================================================
+
+class BuiltinFactor(Base):
+    """内置因子定义表"""
+    __tablename__ = "builtin_factors"
+
+    id = Column(String(36), primary_key=True, comment="因子ID")
+    name = Column(String(100), nullable=False, comment="因子英文名称")
+    display_name = Column(String(100), nullable=False, comment="因子显示名称")
+    description = Column(Text, comment="因子描述")
+    category = Column(String(50), nullable=False, comment="因子分类：trend/momentum/volume/volatility/valuation")
+    
+    # 计算方法
+    calculation_method = Column(String(50), nullable=False, comment="计算方法：talib/custom/formula")
+    formula = Column(Text, comment="计算公式或TA-Lib函数名")
+    
+    # 参数配置
+    default_parameters = Column(JSON, comment="默认参数配置")
+    parameter_schema = Column(JSON, comment="参数验证schema")
+    input_fields = Column(JSON, comment="需要的输入字段 ['close', 'high', 'low', 'volume']")
+    output_type = Column(String(20), default="single", comment="输出类型：single/multiple")
+    
+    # 状态信息
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    
+    # 元数据
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
+    
+    def __repr__(self):
+        return f"<BuiltinFactor(id='{self.id}', name='{self.name}', category='{self.category}')>"
+
+
+class StrategyConfig(Base):
+    """策略配置表"""
+    __tablename__ = "strategy_configs"
+
+    id = Column(String(36), primary_key=True, comment="策略配置ID")
+    name = Column(String(100), nullable=False, comment="策略名称")
+    description = Column(Text, comment="策略描述")
+    
+    # 因子配置
+    factor_configs = Column(JSON, nullable=False, comment="因子配置数组")
+    weight_config = Column(JSON, nullable=False, comment="权重配置")
+    
+    # 过滤条件
+    filters = Column(JSON, comment="筛选条件")
+    max_results = Column(Integer, default=100, comment="最大结果数量")
+    
+    # 元信息
+    created_by = Column(String(50), comment="创建者")
+    tags = Column(String(500), comment="标签，逗号分隔")
+    
+    # 使用统计
+    last_used_at = Column(DateTime, comment="最后使用时间")
+    usage_count = Column(Integer, default=0, comment="使用次数")
+    is_template = Column(Boolean, default=False, comment="是否为模板")
+    
+    # 元数据
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
+    
+    def __repr__(self):
+        return f"<StrategyConfig(id='{self.id}', name='{self.name}')>"
+
+
+class FactorStatistics(Base):
+    """因子统计分析表"""
+    __tablename__ = "factor_statistics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    factor_id = Column(String(36), nullable=False, comment="因子ID")
+    factor_type = Column(String(20), nullable=False, comment="因子类型：builtin/custom")
+    analysis_date = Column(DateTime, nullable=False, comment="分析日期")
+    
+    # 统计指标
+    mean_value = Column(Float, comment="均值")
+    std_deviation = Column(Float, comment="标准差")
+    min_value = Column(Float, comment="最小值")
+    max_value = Column(Float, comment="最大值")
+    quantile_25 = Column(Float, comment="25%分位数")
+    quantile_50 = Column(Float, comment="50%分位数（中位数）")
+    quantile_75 = Column(Float, comment="75%分位数")
+    skewness = Column(Float, comment="偏度")
+    kurtosis = Column(Float, comment="峰度")
+    null_ratio = Column(Float, comment="空值比例")
+    
+    # 有效性指标
+    effectiveness_score = Column(Float, comment="有效性得分")
+    
+    # 元数据
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    
+    def __repr__(self):
+        return f"<FactorStatistics(factor_id='{self.factor_id}', analysis_date='{self.analysis_date}')>"
+
+
+class StrategyTemplate(Base):
+    """策略模板表"""
+    __tablename__ = "strategy_templates"
+
+    id = Column(String(36), primary_key=True, comment="模板ID")
+    name = Column(String(100), nullable=False, comment="模板名称")
+    display_name = Column(String(100), nullable=False, comment="显示名称")
+    description = Column(Text, comment="模板描述")
+    category = Column(String(50), comment="模板分类：value/growth/technical/momentum/quality")
+    
+    # 模板配置
+    factor_configs = Column(JSON, nullable=False, comment="因子配置")
+    default_weights = Column(JSON, nullable=False, comment="默认权重")
+    
+    # 适用信息
+    applicable_markets = Column(JSON, comment="适用市场")
+    risk_level = Column(String(20), comment="风险等级：low/medium/high")
+    expected_return_range = Column(String(50), comment="预期收益范围")
+    usage_scenarios = Column(Text, comment="使用场景")
+    
+    # 状态信息
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    
+    # 元数据
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
+    
+    def __repr__(self):
+        return f"<StrategyTemplate(id='{self.id}', name='{self.name}', category='{self.category}')>"
+
+
+class FactorCorrelation(Base):
+    """因子相关性表"""
+    __tablename__ = "factor_correlations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    factor1_id = Column(String(36), nullable=False, comment="因子1 ID")
+    factor1_type = Column(String(20), nullable=False, comment="因子1类型：builtin/custom")
+    factor2_id = Column(String(36), nullable=False, comment="因子2 ID")
+    factor2_type = Column(String(20), nullable=False, comment="因子2类型：builtin/custom")
+    
+    # 相关性指标
+    correlation_coefficient = Column(Float, comment="相关系数")
+    p_value = Column(Float, comment="P值")
+    analysis_date = Column(DateTime, nullable=False, comment="分析日期")
+    sample_size = Column(Integer, comment="样本数量")
+    
+    # 元数据
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    
+    def __repr__(self):
+        return f"<FactorCorrelation(factor1='{self.factor1_id}', factor2='{self.factor2_id}', correlation={self.correlation_coefficient})>"
