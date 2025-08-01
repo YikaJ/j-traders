@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 import Plot from 'react-plotly.js';
 import { marketApi, watchlistApi, stockApi, MarketIndex, WatchlistStock } from '../services/api';
+import dayjs from 'dayjs';
 
 const Dashboard: React.FC = () => {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
@@ -68,7 +69,7 @@ const Dashboard: React.FC = () => {
     try {
       const historyData = await marketApi.getStockHistory('000001.SH', 30);
       if (historyData && historyData.data && historyData.data.length > 0) {
-        const dates = historyData.data.map((item: any) => item.date);
+        const dates = historyData.data.map((item: any) => dayjs(item.date).format('YYYY-MM-DD HH:mm:ss'));
         const prices = historyData.data.map((item: any) => item.close);
         setChartData({ dates, prices });
       } else {
