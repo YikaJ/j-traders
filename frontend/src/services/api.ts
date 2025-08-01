@@ -217,8 +217,7 @@ export const stockApi = {
   // 获取股票同步信息
   getSyncInfo: async () => {
     // 添加时间戳防止缓存
-    const params = { _t: Date.now() };
-    return api.get('/stocks/sync/info', { params });
+    return api.get('/stocks/sync/info');
   },
 
   // 同步股票数据

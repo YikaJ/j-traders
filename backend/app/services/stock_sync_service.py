@@ -20,6 +20,9 @@ class StockSyncService:
     
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        # 从配置中获取调试模式
+        from app.core.config import settings
+        self.debug_mode = settings.DEBUG
     
     async def sync_stock_list(self, db: Session) -> Dict[str, Any]:
         """
@@ -274,20 +277,46 @@ class StockSyncService:
     async def get_last_sync_info(self, db: Session) -> Dict[str, Any]:
         """获取最后同步信息"""
         try:
+            self.logger.info("开始获取同步信息...")
+            
             # 查询最新的股票记录创建时间
             result = db.execute(text("SELECT MAX(updated_at) as last_update FROM stocks")).fetchone()
             last_update = result[0] if result and result[0] else None
             
-            stock_count = await self.get_stock_count(db)
+            self.logger.info(f"数据库查询结果: {result}")
+            self.logger.info(f"last_update 类型: {type(last_update)}, 值: {last_update}")
             
-            return {
-                "last_sync_time": last_update.isoformat() if last_update else None,
+            stock_count = await self.get_stock_count(db)
+            self.logger.info(f"股票统计: {stock_count}")
+            
+            # 处理 last_update 的格式
+            if last_update:
+                if isinstance(last_update, str):
+                    # 如果是字符串，直接返回
+                    last_sync_time = last_update
+                    self.logger.info(f"last_update 是字符串，直接使用: {last_sync_time}")
+                else:
+                    # 如果是 datetime 对象，转换为 ISO 格式
+                    last_sync_time = last_update.isoformat()
+                    self.logger.info(f"last_update 是 datetime，转换为 ISO: {last_sync_time}")
+            else:
+                last_sync_time = None
+                self.logger.warning("last_update 为空")
+            
+            result_data = {
+                "last_sync_time": last_sync_time,
                 "stock_count": stock_count,
                 "sync_available": True
             }
             
+            self.logger.info(f"返回同步信息: {result_data}")
+            return result_data
+            
         except Exception as e:
-            self.logger.error(f"获取同步信息失败: {e}")
+            self.logger.error(f"获取同步信息失败: {e}", exc_info=True)
+            # 在开发环境下，重新抛出异常以便调试
+            if hasattr(self, 'debug_mode') and self.debug_mode:
+                raise
             return {
                 "last_sync_time": None,
                 "stock_count": {"total": 0, "active": 0, "sz_market": 0, "sh_market": 0},

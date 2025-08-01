@@ -149,8 +149,12 @@ async def get_sync_info(db: Session = Depends(get_db)):
         )
         
     except Exception as e:
-        logger.error(f"获取同步信息失败: {e}")
-        raise HTTPException(status_code=500, detail="获取同步信息失败")
+        logger.error(f"获取同步信息失败: {e}", exc_info=True)
+        # 在开发环境下返回更详细的错误信息
+        if settings.DEBUG:
+            raise HTTPException(status_code=500, detail=f"获取同步信息失败: {str(e)}")
+        else:
+            raise HTTPException(status_code=500, detail="获取同步信息失败")
 
 
 @router.post("/sync", response_model=StockSyncResponse)
