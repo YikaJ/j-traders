@@ -4,8 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react
 import {
   DashboardOutlined,
   FundOutlined,
-  HeartOutlined,
-  SettingOutlined
+  HeartOutlined
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import 'dayjs/locale/zh-cn';
