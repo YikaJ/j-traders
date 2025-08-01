@@ -1,5 +1,13 @@
-// jest-dom adds custom jest matchers for asserting on DOM nodes.
-// allows you to do things like:
-// expect(element).toHaveTextContent(/react/i)
-// learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
+// Vitest setup file
+// 这里可以添加全局测试配置
+import { expect, afterEach } from 'vitest';
+import { cleanup } from '@testing-library/react';
+import * as matchers from '@testing-library/jest-dom/matchers';
+
+// 扩展 Vitest 的 expect 方法
+expect.extend(matchers);
+
+// 每个测试后清理
+afterEach(() => {
+  cleanup();
+});
