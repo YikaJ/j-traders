@@ -79,6 +79,7 @@ export interface WatchlistStock {
   change: number;
   changePercent: number;
   addedAt?: string;
+  notes?: string;
 }
 
 export interface SearchStock {
