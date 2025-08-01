@@ -1,113 +1,128 @@
 import React from 'react';
-import { ConfigProvider, Layout, Menu, theme } from 'antd';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
-  DashboardOutlined,
-  FundOutlined,
-  HeartOutlined
-} from '@ant-design/icons';
-import zhCN from 'antd/locale/zh_CN';
-import 'dayjs/locale/zh-cn';
+  ChartBarIcon,
+  CurrencyDollarIcon,
+  HeartIcon
+} from '@heroicons/react/24/outline';
 
-// 页面组件（临时）
+// 页面组件
 import Dashboard from './pages/Dashboard';
 import QuantitativeSelection from './pages/QuantitativeSelection';
 import Watchlist from './pages/Watchlist';
 
-import './App.css';
-
-const { Header, Content, Sider } = Layout;
-
 const menuItems = [
   {
     key: '/',
-    icon: <DashboardOutlined />,
-    label: <Link to="/">大盘监控</Link>,
+    icon: ChartBarIcon,
+    label: '大盘监控',
+    path: '/'
   },
   {
     key: '/quantitative',
-    icon: <FundOutlined />,
-    label: <Link to="/quantitative">量化选股</Link>,
+    icon: CurrencyDollarIcon,
+    label: '量化选股',
+    path: '/quantitative'
   },
   {
     key: '/watchlist',
-    icon: <HeartOutlined />,
-    label: <Link to="/watchlist">自选股</Link>,
+    icon: HeartIcon,
+    label: '自选股',
+    path: '/watchlist'
   },
 ];
 
 const AppContent: React.FC = () => {
   const location = useLocation();
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
+
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case '/': return '大盘监控';
+      case '/quantitative': return '量化选股';
+      case '/watchlist': return '自选股管理';
+      default: return '量化选股系统';
+    }
+  };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={200} style={{ background: colorBgContainer }}>
-        <div style={{ 
-          height: 64, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          fontSize: '18px',
-          fontWeight: 'bold',
-          borderBottom: '1px solid #f0f0f0'
-        }}>
-          量化选股系统
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          style={{ height: '100%', borderRight: 0 }}
-          items={menuItems}
-        />
-      </Sider>
-      <Layout>
-        <Header style={{ 
-          padding: '0 24px', 
-          background: colorBgContainer,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid #f0f0f0'
-        }}>
-          <h2 style={{ margin: 0 }}>
-            {location.pathname === '/' && '大盘监控'}
-            {location.pathname === '/quantitative' && '量化选股'}
-            {location.pathname === '/watchlist' && '自选股管理'}
-          </h2>
-          <div style={{ color: '#666' }}>
-            系统状态: 正常 | 最后更新: {new Date().toLocaleTimeString()}
+    <div className="min-h-screen bg-base-200">
+      <div className="drawer lg:drawer-open">
+        <input id="drawer-toggle" type="checkbox" className="drawer-toggle" />
+        
+        {/* Page content */}
+        <div className="drawer-content flex flex-col">
+          {/* Navbar */}
+          <div className="navbar bg-base-100 shadow-lg">
+            <div className="flex-none lg:hidden">
+              <label htmlFor="drawer-toggle" className="btn btn-square btn-ghost">
+                <svg className="inline-block w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+              </label>
+            </div>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{getPageTitle()}</h1>
+            </div>
+            <div className="flex-none">
+              <div className="text-sm">
+                <span className="badge badge-success badge-sm mr-2">正常</span>
+                <span className="text-base-content/60">
+                  最后更新: {new Date().toLocaleTimeString()}
+                </span>
+              </div>
+            </div>
           </div>
-        </Header>
-        <Content
-          style={{
-            margin: '24px 16px',
-            padding: 24,
-            minHeight: 280,
-            background: colorBgContainer,
-            borderRadius: borderRadiusLG,
-          }}
-        >
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/quantitative" element={<QuantitativeSelection />} />
-            <Route path="/watchlist" element={<Watchlist />} />
-          </Routes>
-        </Content>
-      </Layout>
-    </Layout>
+
+          {/* Page content */}
+          <main className="flex-1 p-6">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/quantitative" element={<QuantitativeSelection />} />
+              <Route path="/watchlist" element={<Watchlist />} />
+            </Routes>
+          </main>
+        </div>
+
+        {/* Sidebar */}
+        <div className="drawer-side">
+          <label htmlFor="drawer-toggle" className="drawer-overlay"></label>
+          <aside className="w-64 min-h-full bg-base-100">
+            {/* Logo */}
+            <div className="flex items-center justify-center h-16 border-b border-base-200">
+              <h2 className="text-lg font-bold text-primary">量化选股系统</h2>
+            </div>
+            
+            {/* Menu */}
+            <ul className="menu p-4 w-full">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+                
+                return (
+                  <li key={item.key}>
+                    <Link 
+                      to={item.path}
+                      className={`flex items-center gap-3 ${isActive ? 'active' : ''}`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </aside>
+        </div>
+      </div>
+    </div>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <ConfigProvider locale={zhCN}>
-      <Router>
-        <AppContent />
-      </Router>
-    </ConfigProvider>
+    <Router>
+      <AppContent />
+    </Router>
   );
 };
 

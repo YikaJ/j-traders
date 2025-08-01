@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Space, Button, message, Modal, Spin } from 'antd';
-import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined, SyncOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { 
+  ArrowTrendingUpIcon, 
+  ArrowTrendingDownIcon, 
+  ArrowPathIcon, 
+  ArrowsRightLeftIcon, 
+  CircleStackIcon 
+} from '@heroicons/react/24/outline';
 import Plot from 'react-plotly.js';
 import { marketApi, watchlistApi, stockApi, MarketIndex, WatchlistStock } from '../services/api';
+import dayjs from 'dayjs';
 
 const Dashboard: React.FC = () => {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
@@ -12,6 +18,13 @@ const Dashboard: React.FC = () => {
   const [syncInfo, setSyncInfo] = useState<any>(null);
   const [syncing, setSyncing] = useState(false);
   const [chartData, setChartData] = useState<{ dates: string[], prices: number[] }>({ dates: [], prices: [] });
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+
+  // 消息提示函数
+  const showMessage = (type: 'success' | 'error' | 'info', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  };
 
   // 加载市场指数数据
   const loadMarketIndices = async () => {
@@ -20,7 +33,7 @@ const Dashboard: React.FC = () => {
       setIndices(data);
     } catch (error) {
       console.error('获取市场指数失败:', error);
-      message.error('获取市场指数失败，请检查网络连接');
+      showMessage('error', '获取市场指数失败，请检查网络连接');
       // 如果API调用失败，使用模拟数据作为备用
       setIndices([
         {
@@ -56,16 +69,14 @@ const Dashboard: React.FC = () => {
     try {
       const historyData = await marketApi.getStockHistory('000001.SH', 30);
       if (historyData && historyData.data && historyData.data.length > 0) {
-        const dates = historyData.data.map((item: any) => item.date);
+        const dates = historyData.data.map((item: any) => dayjs(item.date).format('YYYY-MM-DD HH:mm:ss'));
         const prices = historyData.data.map((item: any) => item.close);
         setChartData({ dates, prices });
       } else {
-        // 如果没有数据，使用空数组
         setChartData({ dates: [], prices: [] });
       }
     } catch (error) {
       console.error('获取上证指数历史数据失败:', error);
-      // 如果获取失败，使用空数组
       setChartData({ dates: [], prices: [] });
     }
   };
@@ -77,7 +88,7 @@ const Dashboard: React.FC = () => {
       setWatchlist(data);
     } catch (error) {
       console.error('获取自选股失败:', error);
-      message.error('获取自选股失败，请检查网络连接');
+      showMessage('error', '获取自选股失败，请检查网络连接');
       // 如果API调用失败，使用模拟数据作为备用
       setWatchlist([
         {
@@ -117,9 +128,9 @@ const Dashboard: React.FC = () => {
     setLoading(true);
     try {
       await Promise.all([loadMarketIndices(), loadWatchlist(), loadShanghaiIndexHistory()]);
-      message.success('数据刷新成功');
+      showMessage('success', '数据刷新成功');
     } catch (error) {
-      message.error('数据刷新失败');
+      showMessage('error', '数据刷新失败');
     } finally {
       setLoading(false);
     }
@@ -132,7 +143,7 @@ const Dashboard: React.FC = () => {
       setSyncInfo(info);
     } catch (error) {
       console.error('获取同步信息失败:', error);
-      message.error('获取同步信息失败');
+      showMessage('error', '获取同步信息失败');
     }
   };
 
@@ -142,13 +153,11 @@ const Dashboard: React.FC = () => {
     try {
       const result = await stockApi.syncStockData();
       
-      // 显示详细的同步结果
-      message.success(
+      showMessage('success', 
         `同步完成！共获取 ${result.total_fetched || 0} 只股票，` +
         `新增 ${result.new_stocks || 0} 只，更新 ${result.updated_stocks || 0} 只`
       );
       
-      // 立即刷新一次，然后延迟再刷新一次确保数据更新
       await loadSyncInfo();
       
       setTimeout(async () => {
@@ -158,7 +167,7 @@ const Dashboard: React.FC = () => {
       
     } catch (error) {
       console.error('股票数据同步失败:', error);
-      message.error('股票数据同步失败');
+      showMessage('error', '股票数据同步失败');
     } finally {
       setSyncing(false);
     }
@@ -170,168 +179,143 @@ const Dashboard: React.FC = () => {
     await loadSyncInfo();
   };
 
-  const watchlistColumns = [
-    {
-      title: '代码',
-      dataIndex: 'symbol',
-      key: 'symbol',
-    },
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: '现价',
-      dataIndex: 'price',
-      key: 'price',
-      render: (price: number) => `¥${(price || 0).toFixed(2)}`,
-    },
-    {
-      title: '涨跌',
-      dataIndex: 'change',
-      key: 'change',
-      render: (change: number) => (
-        <span style={{ color: (change || 0) >= 0 ? '#f5222d' : '#52c41a' }}>
-          {(change || 0) >= 0 ? '+' : ''}{(change || 0).toFixed(2)}
-        </span>
-      ),
-    },
-    {
-      title: '涨跌幅',
-      dataIndex: 'changePercent',
-      key: 'changePercent',
-      render: (changePercent: number) => (
-        <Tag color={(changePercent || 0) >= 0 ? 'red' : 'green'}>
-          {(changePercent || 0) >= 0 ? '+' : ''}{(changePercent || 0).toFixed(2)}%
-        </Tag>
-      ),
-    }
-  ];
-
   return (
-    <div>
-      <Row gutter={[16, 16]}>
-        {/* 市场指数卡片 */}
+    <div className="space-y-6">
+      {/* 消息提示 */}
+      {message && (
+        <div className={`alert ${
+          message.type === 'success' ? 'alert-success' : 
+          message.type === 'error' ? 'alert-error' : 'alert-info'
+        }`}>
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      {/* 市场指数卡片 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {indices.map((index) => (
-          <Col xs={24} sm={12} lg={8} key={index.symbol}>
-            <Card>
-              <Statistic
-                title={index.name}
-                value={index.price || 0}
-                precision={2}
-                valueStyle={{ 
-                  color: (index.change || 0) >= 0 ? '#f5222d' : '#52c41a',
-                  fontSize: '24px'
-                }}
-                prefix={(index.change || 0) >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                suffix={
-                  <div style={{ fontSize: '14px', marginTop: '8px' }}>
-                    <div>
-                      {(index.change || 0) >= 0 ? '+' : ''}{(index.change || 0).toFixed(2)} 
-                      ({(index.changePercent || 0) >= 0 ? '+' : ''}{(index.changePercent || 0).toFixed(2)}%)
-                    </div>
-                    <div style={{ color: '#666', fontSize: '12px' }}>
-                      成交量: {((index.volume || 0) / 100000000).toFixed(2)}亿
-                    </div>
-                  </div>
-                }
-              />
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
-        {/* 股票数据管理 */}
-        <Col xs={24}>
-          <Card 
-            title="股票数据管理" 
-            extra={
-              <Space>
-                <Button 
-                  icon={<DatabaseOutlined />} 
-                  onClick={showSyncModal}
-                >
-                  数据同步
-                </Button>
-                <Button 
-                  icon={<ReloadOutlined />} 
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
-                      message.success('数据刷新成功');
-                    } catch (error) {
-                      message.error('数据刷新失败');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  loading={loading}
-                >
-                  刷新数据
-                </Button>
-              </Space>
-            }
-          >
-            <Row gutter={[16, 16]}>
-              <Col span={6}>
-                <Statistic
-                  title="股票总数"
-                  value={syncInfo?.stock_count?.total || 0}
-                  prefix={<DatabaseOutlined />}
-                />
-              </Col>
-              <Col span={6}>
-                <Statistic
-                  title="活跃股票"
-                  value={syncInfo?.stock_count?.active || 0}
-                  valueStyle={{ color: '#3f8600' }}
-                />
-              </Col>
-              <Col span={6}>
-                <Statistic
-                  title="上交所"
-                  value={syncInfo?.stock_count?.sh_market || 0}
-                  valueStyle={{ color: '#cf1322' }}
-                />
-              </Col>
-              <Col span={6}>
-                <Statistic
-                  title="深交所"
-                  value={syncInfo?.stock_count?.sz_market || 0}
-                  valueStyle={{ color: '#389e0d' }}
-                />
-              </Col>
-            </Row>
-            {syncInfo?.last_sync_time && (
-              <div style={{ marginTop: '16px', color: '#666', fontSize: '12px' }}>
-                最后同步时间: {new Date(syncInfo.last_sync_time).toLocaleString()}
+          <div key={index.symbol} className="card bg-base-100 shadow-xl">
+            <div className="card-body p-6">
+              <h3 className="card-title text-lg">{index.name}</h3>
+              <div className="flex items-center gap-2">
+                {(index.change || 0) >= 0 ? (
+                  <ArrowTrendingUpIcon className="w-6 h-6 text-success" />
+                ) : (
+                  <ArrowTrendingDownIcon className="w-6 h-6 text-error" />
+                )}
+                <span className={`text-2xl font-bold ${
+                  (index.change || 0) >= 0 ? 'text-success' : 'text-error'
+                }`}>
+                  {(index.price || 0).toFixed(2)}
+                </span>
               </div>
-            )}
-            <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
-              数据获取时间: {new Date().toLocaleString()}
+              <div className="text-sm space-y-1">
+                <div className={`${(index.change || 0) >= 0 ? 'text-success' : 'text-error'}`}>
+                  {(index.change || 0) >= 0 ? '+' : ''}{(index.change || 0).toFixed(2)} 
+                  ({(index.changePercent || 0) >= 0 ? '+' : ''}{(index.changePercent || 0).toFixed(2)}%)
+                </div>
+                <div className="text-base-content/60 text-xs">
+                  成交量: {((index.volume || 0) / 100000000).toFixed(2)}亿
+                </div>
+              </div>
             </div>
-          </Card>
-        </Col>
-      </Row>
+          </div>
+        ))}
+      </div>
 
-      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
-        {/* 上证指数走势图 */}
-        <Col xs={24} lg={16}>
-          <Card 
-            title="上证指数走势" 
-            extra={
-              <Button 
-                icon={<ReloadOutlined />} 
-                onClick={handleRefresh}
-                loading={loading}
+      {/* 股票数据管理 */}
+      <div className="card bg-base-100 shadow-xl">
+        <div className="card-body">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="card-title text-xl">股票数据管理</h2>
+            <div className="flex gap-2">
+              <button 
+                className="btn btn-primary"
+                onClick={showSyncModal}
               >
+                <CircleStackIcon className="w-4 h-4" />
+                数据同步
+              </button>
+              <button 
+                className={`btn btn-outline ${loading ? 'loading' : ''}`}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
+                    showMessage('success', '数据刷新成功');
+                  } catch (error) {
+                    showMessage('error', '数据刷新失败');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+              >
+                <ArrowPathIcon className="w-4 h-4" />
+                刷新数据
+              </button>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="stat bg-base-200 rounded-lg">
+              <div className="stat-figure text-primary">
+                <CircleStackIcon className="w-8 h-8" />
+              </div>
+              <div className="stat-title">股票总数</div>
+              <div className="stat-value text-primary">
+                {syncInfo?.stock_count?.total || 0}
+              </div>
+            </div>
+            
+            <div className="stat bg-base-200 rounded-lg">
+              <div className="stat-title">活跃股票</div>
+              <div className="stat-value text-success">
+                {syncInfo?.stock_count?.active || 0}
+              </div>
+            </div>
+            
+            <div className="stat bg-base-200 rounded-lg">
+              <div className="stat-title">上交所</div>
+              <div className="stat-value text-error">
+                {syncInfo?.stock_count?.sh_market || 0}
+              </div>
+            </div>
+            
+            <div className="stat bg-base-200 rounded-lg">
+              <div className="stat-title">深交所</div>
+              <div className="stat-value text-success">
+                {syncInfo?.stock_count?.sz_market || 0}
+              </div>
+            </div>
+          </div>
+          
+          {syncInfo?.last_sync_time && (
+            <div className="text-sm text-base-content/60 mt-4">
+              最后同步时间: {new Date(syncInfo.last_sync_time).toLocaleString()}
+            </div>
+          )}
+          <div className="text-xs text-base-content/40 mt-2">
+            数据获取时间: {new Date().toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* 上证指数走势图 */}
+        <div className="lg:col-span-2 card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="card-title">上证指数走势</h2>
+              <button 
+                className={`btn btn-outline btn-sm ${loading ? 'loading' : ''}`}
+                onClick={handleRefresh}
+                disabled={loading}
+              >
+                <ArrowPathIcon className="w-4 h-4" />
                 刷新
-              </Button>
-            }
-          >
+              </button>
+            </div>
             <Plot
               data={[
                 {
@@ -349,81 +333,126 @@ const Dashboard: React.FC = () => {
                 margin: { l: 50, r: 50, t: 20, b: 50 },
                 xaxis: { title: { text: '日期' } },
                 yaxis: { title: { text: '点数' } },
-                showlegend: false
+                showlegend: false,
+                paper_bgcolor: 'transparent',
+                plot_bgcolor: 'transparent',
+                modebar: {
+                  bgcolor: '#000',
+                  color: 'white',
+                  activecolor: '#1890ff'
+                },
+                font: {
+                  color: '#ffffff'
+                }
               }}
               config={{ responsive: true }}
               style={{ width: '100%' }}
             />
-          </Card>
-        </Col>
+          </div>
+        </div>
+        
 
         {/* 自选股监控 */}
-        <Col xs={24} lg={8}>
-          <Card title="自选股监控" extra={<a href="/watchlist">查看全部</a>}>
-            <Table
-              dataSource={watchlist}
-              columns={watchlistColumns}
-              pagination={false}
-              size="small"
-              rowKey="symbol"
-            />
-          </Card>
-        </Col>
-      </Row>
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="card-title">自选股监控</h2>
+              <a href="/watchlist" className="link link-primary">查看全部</a>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="table table-compact w-full">
+                <thead>
+                  <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>现价</th>
+                    <th>涨跌幅</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {watchlist.map((stock) => (
+                    <tr key={stock.symbol}>
+                      <td className="text-xs">{stock.symbol}</td>
+                      <td className="text-sm font-medium">{stock.name}</td>
+                      <td className="text-sm">¥{(stock.price || 0).toFixed(2)}</td>
+                      <td>
+                        <div className={`badge badge-sm ${
+                          (stock.changePercent || 0) >= 0 ? 'badge-success' : 'badge-error'
+                        }`}>
+                          {(stock.changePercent || 0) >= 0 ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 股票数据同步对话框 */}
-      <Modal
-        title="股票数据同步"
-        open={syncModalVisible}
-        onCancel={() => setSyncModalVisible(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setSyncModalVisible(false)}>
-            取消
-          </Button>,
-          <Button 
-            key="sync" 
-            type="primary" 
-            icon={<SyncOutlined />}
-            loading={syncing}
-            onClick={handleStockSync}
-          >
-            开始同步
-          </Button>
-        ]}
-      >
-        <div>
-          <p>
-            <strong>数据同步说明：</strong>
-          </p>
-          <ul>
-            <li>同步操作将从数据源获取最新的股票列表信息</li>
-            <li>包括股票代码、名称、行业、地区等基础信息</li>
-            <li>同步过程可能需要几分钟时间，请耐心等待</li>
-            <li>同步完成后，股票搜索功能将使用最新数据</li>
-          </ul>
-          
-          {syncInfo && (
-            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
-              <p><strong>当前数据状态：</strong></p>
-              <p>股票总数: {syncInfo.stock_count?.total || 0}</p>
-              <p>活跃股票: {syncInfo.stock_count?.active || 0}</p>
-              <p>上交所: {syncInfo.stock_count?.sh_market || 0}</p>
-              <p>深交所: {syncInfo.stock_count?.sz_market || 0}</p>
-              {syncInfo.last_sync_time && (
-                <p>最后同步: {new Date(syncInfo.last_sync_time).toLocaleString()}</p>
+      {syncModalVisible && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg mb-4">股票数据同步</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <p className="font-semibold mb-2">数据同步说明：</p>
+                <ul className="list-disc list-inside text-sm space-y-1 text-base-content/80">
+                  <li>同步操作将从数据源获取最新的股票列表信息</li>
+                  <li>包括股票代码、名称、行业、地区等基础信息</li>
+                  <li>同步过程可能需要几分钟时间，请耐心等待</li>
+                  <li>同步完成后，股票搜索功能将使用最新数据</li>
+                </ul>
+              </div>
+              
+              {syncInfo && (
+                <div className="bg-base-200 p-4 rounded-lg">
+                  <p className="font-semibold mb-2">当前数据状态：</p>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <p>股票总数: {syncInfo.stock_count?.total || 0}</p>
+                    <p>活跃股票: {syncInfo.stock_count?.active || 0}</p>
+                    <p>上交所: {syncInfo.stock_count?.sh_market || 0}</p>
+                    <p>深交所: {syncInfo.stock_count?.sz_market || 0}</p>
+                  </div>
+                  {syncInfo.last_sync_time && (
+                    <p className="text-sm mt-2">最后同步: {new Date(syncInfo.last_sync_time).toLocaleString()}</p>
+                  )}
+                </div>
+              )}
+              
+              {syncing && (
+                <div className="text-center py-8">
+                  <div className="loading loading-spinner loading-lg"></div>
+                  <p className="mt-4">正在同步股票数据，请稍候...</p>
+                </div>
               )}
             </div>
-          )}
-          
-          {syncing && (
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
-              <Spin size="large" />
-              <p style={{ marginTop: '8px' }}>正在同步股票数据，请稍候...</p>
+            
+            <div className="modal-action">
+              <button 
+                className="btn" 
+                onClick={() => setSyncModalVisible(false)}
+                disabled={syncing}
+              >
+                取消
+              </button>
+              <button 
+                className={`btn btn-primary ${syncing ? 'loading' : ''}`}
+                onClick={handleStockSync}
+                disabled={syncing}
+              >
+                <ArrowsRightLeftIcon className="w-4 h-4" />
+                开始同步
+              </button>
             </div>
-          )}
+          </div>
+          <div className="modal-backdrop" onClick={() => !syncing && setSyncModalVisible(false)}></div>
         </div>
-      </Modal>
-    </div>
+      )}
+    </div>  
   );
 };
 
