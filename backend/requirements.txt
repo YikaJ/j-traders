@@ -11,14 +11,14 @@ pydantic==2.4.2
 pydantic-settings==2.0.3
 
 # 金融数据源
-tushare==1.2.89
+tushare>=1.4.0
 
 # 数据处理
-pandas==2.1.1
-numpy==1.24.3
+pandas>=2.2.0
+numpy>=1.26.0
 
 # 安全代码执行
-RestrictedPython==6.0
+RestrictedPython>=8.0
 
 # 任务调度
 APScheduler==3.10.4
