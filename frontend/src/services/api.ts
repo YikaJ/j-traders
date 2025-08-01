@@ -89,10 +89,22 @@ export interface SearchStock {
   market?: string;
 }
 
+export interface SearchStock {
+  symbol: string;
+  name: string;
+  industry?: string;
+  area?: string;
+  market?: string;
+}
+
 export interface SyncResult {
+  success: boolean;
+  message: string;
   new_stocks: number;
   updated_stocks: number;
-  message: string;
+  total_fetched: number;
+  errors: number;
+  duration: number;
 }
 
 // 市场数据API
@@ -204,7 +216,9 @@ export const stockApi = {
 
   // 获取股票同步信息
   getSyncInfo: async () => {
-    return api.get('/stocks/sync/info');
+    // 添加时间戳防止缓存
+    const params = { _t: Date.now() };
+    return api.get('/stocks/sync/info', { params });
   },
 
   // 同步股票数据
@@ -214,7 +228,9 @@ export const stockApi = {
 
   // 获取股票统计
   getStockStats: async () => {
-    return api.get('/stocks/stats');
+    // 添加时间戳防止缓存
+    const params = { _t: Date.now() };
+    return api.get('/stocks/stats', { params });
   },
 };
 

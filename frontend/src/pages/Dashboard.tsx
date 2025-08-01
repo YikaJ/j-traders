@@ -121,8 +121,21 @@ const Dashboard: React.FC = () => {
     setSyncing(true);
     try {
       const result = await stockApi.syncStockData();
-      message.success(`同步完成！新增 ${result.new_stocks || 0} 只股票，更新 ${result.updated_stocks || 0} 只股票`);
-      await loadSyncInfo(); // 重新加载同步信息
+      
+      // 显示详细的同步结果
+      message.success(
+        `同步完成！共获取 ${result.total_fetched || 0} 只股票，` +
+        `新增 ${result.new_stocks || 0} 只，更新 ${result.updated_stocks || 0} 只`
+      );
+      
+      // 立即刷新一次，然后延迟再刷新一次确保数据更新
+      await loadSyncInfo();
+      
+      setTimeout(async () => {
+        await loadSyncInfo();
+        console.log('延迟刷新同步信息完成');
+      }, 2000);
+      
     } catch (error) {
       console.error('股票数据同步失败:', error);
       message.error('股票数据同步失败');
@@ -242,10 +255,20 @@ const Dashboard: React.FC = () => {
                 </Button>
                 <Button 
                   icon={<ReloadOutlined />} 
-                  onClick={handleRefresh}
+                  onClick={async () => {
+                    setLoading(true);
+                    try {
+                      await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
+                      message.success('数据刷新成功');
+                    } catch (error) {
+                      message.error('数据刷新失败');
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
                   loading={loading}
                 >
-                  刷新
+                  刷新数据
                 </Button>
               </Space>
             }
@@ -285,6 +308,9 @@ const Dashboard: React.FC = () => {
                 最后同步时间: {new Date(syncInfo.last_sync_time).toLocaleString()}
               </div>
             )}
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#999' }}>
+              数据获取时间: {new Date().toLocaleString()}
+            </div>
           </Card>
         </Col>
       </Row>
