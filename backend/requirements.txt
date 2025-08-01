@@ -1,0 +1,50 @@
+# Web框架
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# 数据库ORM
+sqlalchemy==2.0.21
+alembic==1.12.1
+
+# 数据验证和序列化
+pydantic==2.4.2
+pydantic-settings==2.0.3
+
+# 金融数据源
+tushare==1.2.89
+
+# 数据处理
+pandas==2.1.1
+numpy==1.24.3
+
+# 安全代码执行
+RestrictedPython==6.0
+
+# 任务调度
+APScheduler==3.10.4
+
+# HTTP客户端
+httpx==0.25.0
+requests==2.31.0
+
+# 日期处理
+python-dateutil==2.8.2
+
+# 环境变量管理
+python-dotenv==1.0.0
+
+# 测试框架
+pytest==7.4.2
+pytest-asyncio==0.21.1
+httpx==0.25.0
+
+# 代码格式化和检查
+black==23.9.1
+flake8==6.1.0
+isort==5.12.0
+
+# 类型检查
+mypy==1.6.0
+
+# 开发工具
+watchdog==3.0.0
