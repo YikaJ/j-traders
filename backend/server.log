@@ -1,8 +1,3 @@
 nohup: ignoring input
-INFO:     Started server process [16012]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-ERROR:    [Errno 98] error while attempting to bind on address ('127.0.0.1', 8000): [errno 98] address already in use
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-启动测试服务器...
+INFO:     Will watch for changes in these directories: ['/workspace/backend']
+ERROR:    [Errno 98] Address already in use

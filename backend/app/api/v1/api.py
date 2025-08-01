@@ -15,10 +15,13 @@ async def test_endpoint():
     return {"message": "API v1 工作正常", "version": "1.0.0"}
 
 
+# 包含所有路由模块
+from app.api.v1.endpoints import market, watchlist
+
+api_router.include_router(market.router, prefix="/market", tags=["market"])
+api_router.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])
+
 # 这里将来会包含其他路由模块：
-# from app.api.v1.endpoints import market, factors, strategies, watchlist
-# 
-# api_router.include_router(market.router, prefix="/market", tags=["market"])
+# from app.api.v1.endpoints import factors, strategies
 # api_router.include_router(factors.router, prefix="/factors", tags=["factors"])
 # api_router.include_router(strategies.router, prefix="/strategies", tags=["strategies"])
-# api_router.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])

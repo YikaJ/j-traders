@@ -21,7 +21,16 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logging.info("量化选股系统启动中...")
     
-    # 这里可以添加数据库初始化、定时任务启动等
+    # 初始化数据库
+    try:
+        from app.db.database import init_db, check_db_connection
+        init_db()
+        if check_db_connection():
+            logging.info("数据库连接正常")
+        else:
+            logging.error("数据库连接失败")
+    except Exception as e:
+        logging.error(f"数据库初始化失败: {e}")
     
     yield
     
