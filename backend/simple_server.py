@@ -79,6 +79,22 @@ class AddWatchlistRequest(BaseModel):
     symbol: str
     name: str
 
+class StockSearchResult(BaseModel):
+    symbol: str
+    name: str
+    industry: Optional[str] = None
+    area: Optional[str] = None
+    market: Optional[str] = None
+
+class StockSyncResponse(BaseModel):
+    success: bool
+    message: str
+    total_fetched: int
+    new_stocks: int
+    updated_stocks: int
+    errors: int
+    duration: float
+
 # 模拟数据
 mock_indices = [
     MarketIndex(
@@ -155,6 +171,20 @@ mock_watchlist = [
         changePercent=random.uniform(-4, 4),
         addedAt=(datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
     )
+]
+
+# 模拟股票数据库
+mock_stocks = [
+    {"symbol": "000001.SZ", "name": "平安银行", "industry": "银行", "area": "深圳", "market": "SZ"},
+    {"symbol": "000002.SZ", "name": "万科A", "industry": "房地产开发", "area": "深圳", "market": "SZ"},
+    {"symbol": "600036.SH", "name": "招商银行", "industry": "银行", "area": "深圳", "market": "SH"},
+    {"symbol": "600519.SH", "name": "贵州茅台", "industry": "白酒", "area": "贵州", "market": "SH"},
+    {"symbol": "000858.SZ", "name": "五粮液", "industry": "白酒", "area": "四川", "market": "SZ"},
+    {"symbol": "300750.SZ", "name": "宁德时代", "industry": "电池", "area": "福建", "market": "SZ"},
+    {"symbol": "000166.SZ", "name": "申万宏源", "industry": "证券", "area": "上海", "market": "SZ"},
+    {"symbol": "600000.SH", "name": "浦发银行", "industry": "银行", "area": "上海", "market": "SH"},
+    {"symbol": "000001.SH", "name": "上证指数", "industry": "指数", "area": "上海", "market": "SH"},
+    {"symbol": "399001.SZ", "name": "深证成指", "industry": "指数", "area": "深圳", "market": "SZ"},
 ]
 
 # API接口
@@ -275,6 +305,72 @@ async def remove_from_watchlist(stock_id: int):
     global mock_watchlist
     mock_watchlist = [s for s in mock_watchlist if s.id != stock_id]
     return {"message": "自选股删除成功"}
+
+# 股票数据接口
+@app.get("/api/v1/stocks/search", response_model=List[StockSearchResult])
+async def search_stocks(q: str, limit: int = 20):
+    """搜索股票"""
+    if not q:
+        return []
+    
+    results = []
+    for stock in mock_stocks:
+        if (q.upper() in stock["symbol"].upper() or 
+            q in stock["name"] or 
+            (stock["industry"] and q in stock["industry"])):
+            results.append(StockSearchResult(
+                symbol=stock["symbol"],
+                name=stock["name"],
+                industry=stock["industry"],
+                area=stock["area"],
+                market=stock["market"]
+            ))
+            if len(results) >= limit:
+                break
+    
+    return results
+
+@app.get("/api/v1/stocks/sync/info")
+async def get_stock_sync_info():
+    """获取股票同步信息"""
+    return {
+        "last_sync_time": datetime.now().isoformat(),
+        "stock_count": {
+            "total": len(mock_stocks),
+            "active": len([s for s in mock_stocks if s["industry"] != "指数"]),
+            "sz_market": len([s for s in mock_stocks if s["market"] == "SZ"]),
+            "sh_market": len([s for s in mock_stocks if s["market"] == "SH"])
+        },
+        "sync_available": True
+    }
+
+@app.post("/api/v1/stocks/sync", response_model=StockSyncResponse)
+async def sync_stock_data():
+    """同步股票数据"""
+    # 模拟同步过程
+    import time
+    time.sleep(2)  # 模拟同步耗时
+    
+    return StockSyncResponse(
+        success=True,
+        message="股票数据同步完成",
+        total_fetched=len(mock_stocks),
+        new_stocks=0,
+        updated_stocks=len(mock_stocks),
+        errors=0,
+        duration=2.0
+    )
+
+@app.get("/api/v1/stocks/stats")
+async def get_stock_stats():
+    """获取股票统计信息"""
+    return {
+        "total_stocks": len(mock_stocks),
+        "active_stocks": len([s for s in mock_stocks if s["industry"] != "指数"]),
+        "sz_market_stocks": len([s for s in mock_stocks if s["market"] == "SZ"]),
+        "sh_market_stocks": len([s for s in mock_stocks if s["market"] == "SH"]),
+        "timestamp": datetime.now().isoformat()
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)

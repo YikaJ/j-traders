@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Statistic, Table, Tag, Space, Button, message } from 'antd';
-import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Table, Tag, Space, Button, message, Modal, Spin } from 'antd';
+import { ArrowUpOutlined, ArrowDownOutlined, ReloadOutlined, SyncOutlined, DatabaseOutlined } from '@ant-design/icons';
 import Plot from 'react-plotly.js';
-import { marketApi, watchlistApi, MarketIndex, WatchlistStock } from '../services/api';
+import { marketApi, watchlistApi, stockApi, MarketIndex, WatchlistStock } from '../services/api';
 
 const Dashboard: React.FC = () => {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
 
   // 加载市场指数数据
   const loadMarketIndices = async () => {
@@ -87,7 +90,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       setDataLoading(true);
-      await Promise.all([loadMarketIndices(), loadWatchlist()]);
+      await Promise.all([loadMarketIndices(), loadWatchlist(), loadSyncInfo()]);
       setDataLoading(false);
     };
     loadData();
@@ -103,6 +106,38 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 加载股票同步信息
+  const loadSyncInfo = async () => {
+    try {
+      const info = await stockApi.getSyncInfo();
+      setSyncInfo(info);
+    } catch (error) {
+      console.error('获取同步信息失败:', error);
+      message.error('获取同步信息失败');
+    }
+  };
+
+  // 执行股票数据同步
+  const handleStockSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await stockApi.syncStockData();
+      message.success(`同步完成！新增 ${result.new_stocks} 只股票，更新 ${result.updated_stocks} 只股票`);
+      await loadSyncInfo(); // 重新加载同步信息
+    } catch (error) {
+      console.error('股票数据同步失败:', error);
+      message.error('股票数据同步失败');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // 打开同步对话框
+  const showSyncModal = async () => {
+    setSyncModalVisible(true);
+    await loadSyncInfo();
   };
 
   const watchlistColumns = [
@@ -196,6 +231,68 @@ const Dashboard: React.FC = () => {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
+        {/* 股票数据管理 */}
+        <Col xs={24}>
+          <Card 
+            title="股票数据管理" 
+            extra={
+              <Space>
+                <Button 
+                  icon={<DatabaseOutlined />} 
+                  onClick={showSyncModal}
+                >
+                  数据同步
+                </Button>
+                <Button 
+                  icon={<ReloadOutlined />} 
+                  onClick={handleRefresh}
+                  loading={loading}
+                >
+                  刷新
+                </Button>
+              </Space>
+            }
+          >
+            <Row gutter={[16, 16]}>
+              <Col span={6}>
+                <Statistic
+                  title="股票总数"
+                  value={syncInfo?.stock_count?.total || 0}
+                  prefix={<DatabaseOutlined />}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic
+                  title="活跃股票"
+                  value={syncInfo?.stock_count?.active || 0}
+                  valueStyle={{ color: '#3f8600' }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic
+                  title="上交所"
+                  value={syncInfo?.stock_count?.sh_market || 0}
+                  valueStyle={{ color: '#cf1322' }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic
+                  title="深交所"
+                  value={syncInfo?.stock_count?.sz_market || 0}
+                  valueStyle={{ color: '#389e0d' }}
+                />
+              </Col>
+            </Row>
+            {syncInfo?.last_sync_time && (
+              <div style={{ marginTop: '16px', color: '#666', fontSize: '12px' }}>
+                最后同步时间: {new Date(syncInfo.last_sync_time).toLocaleString()}
+              </div>
+            )}
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: '24px' }}>
         {/* 上证指数走势图 */}
         <Col xs={24} lg={16}>
           <Card 
@@ -248,6 +345,59 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 股票数据同步对话框 */}
+      <Modal
+        title="股票数据同步"
+        open={syncModalVisible}
+        onCancel={() => setSyncModalVisible(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setSyncModalVisible(false)}>
+            取消
+          </Button>,
+          <Button 
+            key="sync" 
+            type="primary" 
+            icon={<SyncOutlined />}
+            loading={syncing}
+            onClick={handleStockSync}
+          >
+            开始同步
+          </Button>
+        ]}
+      >
+        <div>
+          <p>
+            <strong>数据同步说明：</strong>
+          </p>
+          <ul>
+            <li>同步操作将从数据源获取最新的股票列表信息</li>
+            <li>包括股票代码、名称、行业、地区等基础信息</li>
+            <li>同步过程可能需要几分钟时间，请耐心等待</li>
+            <li>同步完成后，股票搜索功能将使用最新数据</li>
+          </ul>
+          
+          {syncInfo && (
+            <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <p><strong>当前数据状态：</strong></p>
+              <p>股票总数: {syncInfo.stock_count?.total || 0}</p>
+              <p>活跃股票: {syncInfo.stock_count?.active || 0}</p>
+              <p>上交所: {syncInfo.stock_count?.sh_market || 0}</p>
+              <p>深交所: {syncInfo.stock_count?.sz_market || 0}</p>
+              {syncInfo.last_sync_time && (
+                <p>最后同步: {new Date(syncInfo.last_sync_time).toLocaleString()}</p>
+              )}
+            </div>
+          )}
+          
+          {syncing && (
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <Spin size="large" />
+              <p style={{ marginTop: '8px' }}>正在同步股票数据，请稍候...</p>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };

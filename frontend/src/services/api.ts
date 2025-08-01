@@ -180,6 +180,30 @@ export const watchlistApi = {
   },
 };
 
+// 股票数据管理API
+export const stockApi = {
+  // 搜索股票
+  searchStocks: async (keyword: string, limit: number = 20) => {
+    const params = { q: keyword, limit };
+    return api.get('/stocks/search', { params });
+  },
+
+  // 获取股票同步信息
+  getSyncInfo: async () => {
+    return api.get('/stocks/sync/info');
+  },
+
+  // 同步股票数据
+  syncStockData: async () => {
+    return api.post('/stocks/sync');
+  },
+
+  // 获取股票统计
+  getStockStats: async () => {
+    return api.get('/stocks/stats');
+  },
+};
+
 // 健康检查
 export const healthCheck = async () => {
   return api.get('/test');

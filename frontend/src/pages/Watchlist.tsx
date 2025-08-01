@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Space, Modal, Form, Input, Tag, message, Popconfirm, Spin } from 'antd';
 import { PlusOutlined, DeleteOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
-import { watchlistApi, marketApi, WatchlistStock } from '../services/api';
+import { watchlistApi, marketApi, stockApi, WatchlistStock } from '../services/api';
 
 interface SearchStock {
   symbol: string;
   name: string;
-  price: number;
-  changePercent: number;
+  industry?: string;
+  area?: string;
+  market?: string;
 }
 
 const Watchlist: React.FC = () => {
@@ -67,39 +68,19 @@ const Watchlist: React.FC = () => {
   }, []);
 
   const handleSearch = async (keyword: string) => {
-    if (!keyword) return;
+    if (!keyword) {
+      setSearchResults([]);
+      return;
+    }
     
     setSearchLoading(true);
     try {
-      // 这里可以调用股票搜索API，暂时使用模拟数据
-      const mockSearchResults: SearchStock[] = [
-        {
-          symbol: '600519.SH',
-          name: '贵州茅台',
-          price: 1678.50,
-          changePercent: 2.15
-        },
-        {
-          symbol: '000858.SZ',
-          name: '五粮液',
-          price: 145.32,
-          changePercent: -0.85
-        },
-        {
-          symbol: '300750.SZ',
-          name: '宁德时代',
-          price: 198.45,
-          changePercent: 1.25
-        }
-      ];
-      
-      const filtered = mockSearchResults.filter(
-        stock => stock.name.includes(keyword) || stock.symbol.includes(keyword)
-      );
-      setSearchResults(filtered);
+      const results = await stockApi.searchStocks(keyword, 20);
+      setSearchResults(results);
     } catch (error) {
       console.error('搜索股票失败:', error);
       message.error('搜索股票失败，请检查网络连接');
+      setSearchResults([]);
     } finally {
       setSearchLoading(false);
     }
@@ -119,6 +100,7 @@ const Watchlist: React.FC = () => {
       message.success(`${stock.name} 已添加到自选股`);
       setIsAddModalVisible(false);
       form.resetFields();
+      setSearchResults([]); // 清空搜索结果
     } catch (error) {
       console.error('添加自选股失败:', error);
       message.error('添加自选股失败，请检查网络连接');
@@ -241,18 +223,24 @@ const Watchlist: React.FC = () => {
       key: 'name',
     },
     {
-      title: '现价',
-      dataIndex: 'price',
-      key: 'price',
-      render: (price: number) => `¥${price.toFixed(2)}`,
+      title: '行业',
+      dataIndex: 'industry',
+      key: 'industry',
+      render: (industry: string) => industry || '-',
     },
     {
-      title: '涨跌幅',
-      dataIndex: 'changePercent',
-      key: 'changePercent',
-      render: (changePercent: number) => (
-        <Tag color={changePercent >= 0 ? 'red' : 'green'}>
-          {changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%
+      title: '地区',
+      dataIndex: 'area',
+      key: 'area',
+      render: (area: string) => area || '-',
+    },
+    {
+      title: '市场',
+      dataIndex: 'market',
+      key: 'market',
+      render: (market: string) => (
+        <Tag color={market === 'SH' ? 'red' : 'green'}>
+          {market || '-'}
         </Tag>
       ),
     },
