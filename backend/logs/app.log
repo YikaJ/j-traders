@@ -196,3 +196,36 @@ WHERE stocks.symbol = ?
 2025-08-01 12:40:35 - sqlalchemy.engine.Engine - INFO - [generated in 0.00011s] ()
 2025-08-01 12:40:35 - sqlalchemy.engine.Engine - INFO - ROLLBACK
 2025-08-01 12:40:35 - root - INFO - 数据库连接正常
+2025-08-01 12:53:58 - root - INFO - 量化选股系统关闭中...
+2025-08-01 12:53:59 - root - INFO - 日志系统初始化完成
+2025-08-01 12:53:59 - root - INFO - 量化选股系统启动中...
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("stocks")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("stock_daily")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("market_indices")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("watchlist")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("watchlist_groups")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("watchlist_group_members")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("factors")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("strategies")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("strategy_executions")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("selection_results")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - PRAGMA main.table_info("factor_values")
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [raw sql] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - COMMIT
+2025-08-01 12:53:59 - app.db.database - INFO - 数据库初始化完成
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - BEGIN (implicit)
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - SELECT 1
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - [generated in 0.00009s] ()
+2025-08-01 12:53:59 - sqlalchemy.engine.Engine - INFO - ROLLBACK
+2025-08-01 12:53:59 - root - INFO - 数据库连接正常

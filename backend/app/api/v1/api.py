@@ -16,12 +16,9 @@ async def test_endpoint():
 
 
 # 包含所有路由模块
-from app.api.v1.endpoints import market, watchlist, factors
+from app.api.v1.endpoints import market, watchlist, factors, strategies
 
 api_router.include_router(market.router, prefix="/market", tags=["market"])
 api_router.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])
 api_router.include_router(factors.router, prefix="/factors", tags=["factors"])
-
-# 这里将来会包含其他路由模块：
-# from app.api.v1.endpoints import strategies
-# api_router.include_router(strategies.router, prefix="/strategies", tags=["strategies"])
+api_router.include_router(strategies.router, prefix="/strategies", tags=["strategies"])
