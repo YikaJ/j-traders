@@ -12,9 +12,14 @@ from app.schemas.builtin_factors import (
     BuiltinFactorResponse, FactorPreviewRequest, FactorPreviewResult,
     ValidationResult, FactorParameters, CalculationMethod, FactorCategory
 )
-from app.services.builtin_factor_engine import builtin_factor_engine
+from app.services.builtin_factor_engine import builtin_factor_engine, BuiltinFactorEngine
 
 router = APIRouter(prefix="/builtin-factors", tags=["内置因子库"])
+
+
+def get_builtin_factor_engine() -> BuiltinFactorEngine:
+    """获取内置因子引擎实例"""
+    return builtin_factor_engine
 
 
 # 请求/响应模型
