@@ -16,6 +16,9 @@ tushare>=1.4.0
 # 数据处理
 pandas>=2.2.0
 numpy>=1.26.0
+scikit-learn>=1.2.0
+scipy>=1.10.0
+python-multipart>=0.0.5
 
 # 安全代码执行
 RestrictedPython>=8.0
