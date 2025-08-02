@@ -4,12 +4,13 @@
 """
 
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from pydantic import BaseModel
 
 from app.schemas.builtin_factors import (
     BuiltinFactorResponse, FactorPreviewRequest, FactorPreviewResult,
-    ValidationResult, FactorParameters
+    ValidationResult, FactorParameters, CalculationMethod, FactorCategory
 )
 from app.services.builtin_factor_engine import builtin_factor_engine
 from app.services.builtin_factor_service import FactorCategory
@@ -90,21 +91,46 @@ async def list_builtin_factors(
         # 转换为响应格式
         response_factors = []
         for factor in factors:
+            # 处理默认参数
+            default_params = factor.get('default_parameters', {})
+            factor_params = FactorParameters()
+            if 'period' in default_params:
+                period_dict = default_params.get('period')
+                if isinstance(period_dict, dict) and 'default' in period_dict:
+                    factor_params.period = period_dict['default']
+            if 'fast_period' in default_params:
+                fast_period_dict = default_params.get('fast_period')
+                if isinstance(fast_period_dict, dict) and 'default' in fast_period_dict:
+                    factor_params.fast_period = fast_period_dict['default']
+            if 'slow_period' in default_params:
+                slow_period_dict = default_params.get('slow_period')
+                if isinstance(slow_period_dict, dict) and 'default' in slow_period_dict:
+                    factor_params.slow_period = slow_period_dict['default']
+            if 'signal_period' in default_params:
+                signal_period_dict = default_params.get('signal_period')
+                if isinstance(signal_period_dict, dict) and 'default' in signal_period_dict:
+                    factor_params.signal_period = signal_period_dict['default']
+            if 'multiplier' in default_params:
+                multiplier_dict = default_params.get('multiplier')
+                if isinstance(multiplier_dict, dict) and 'default' in multiplier_dict:
+                    factor_params.multiplier = multiplier_dict['default']
+            
+            # 创建响应对象
             response_factor = BuiltinFactorResponse(
                 id=factor['factor_id'],
                 name=factor['name'],
                 display_name=factor['display_name'],
                 description=factor.get('description', ''),
                 category=FactorCategory(factor['category']),
-                calculation_method="builtin",
+                calculation_method=CalculationMethod.CUSTOM,  # 使用枚举值
                 formula=factor.get('formula'),
-                default_parameters=factor.get('default_parameters', {}),
+                default_parameters=factor_params,
                 parameter_schema=factor.get('parameter_schema', {}),
                 input_fields=factor.get('input_fields', []),
                 output_type="single",
                 is_active=True,
-                created_at=None,  # 内置因子没有创建时间
-                updated_at=None
+                created_at=datetime.now(),  # 使用当前时间
+                updated_at=datetime.now()
             )
             response_factors.append(response_factor)
         
@@ -162,21 +188,45 @@ async def get_factor_detail(
         if not factor_info:
             raise HTTPException(status_code=404, detail=f"因子不存在: {factor_id}")
         
+        # 处理默认参数
+        default_params = factor_info.get('default_parameters', {})
+        factor_params = FactorParameters()
+        if 'period' in default_params:
+            period_dict = default_params.get('period')
+            if isinstance(period_dict, dict) and 'default' in period_dict:
+                factor_params.period = period_dict['default']
+        if 'fast_period' in default_params:
+            fast_period_dict = default_params.get('fast_period')
+            if isinstance(fast_period_dict, dict) and 'default' in fast_period_dict:
+                factor_params.fast_period = fast_period_dict['default']
+        if 'slow_period' in default_params:
+            slow_period_dict = default_params.get('slow_period')
+            if isinstance(slow_period_dict, dict) and 'default' in slow_period_dict:
+                factor_params.slow_period = slow_period_dict['default']
+        if 'signal_period' in default_params:
+            signal_period_dict = default_params.get('signal_period')
+            if isinstance(signal_period_dict, dict) and 'default' in signal_period_dict:
+                factor_params.signal_period = signal_period_dict['default']
+        if 'multiplier' in default_params:
+            multiplier_dict = default_params.get('multiplier')
+            if isinstance(multiplier_dict, dict) and 'default' in multiplier_dict:
+                factor_params.multiplier = multiplier_dict['default']
+        
         return BuiltinFactorResponse(
             id=factor_info['factor_id'],
             name=factor_info['name'],
             display_name=factor_info['display_name'],
             description=factor_info.get('description', ''),
             category=FactorCategory(factor_info['category']),
-            calculation_method="builtin",
+            calculation_method=CalculationMethod.CUSTOM,  # 使用枚举值
             formula=factor_info.get('formula'),
-            default_parameters=factor_info.get('default_parameters', {}),
+            default_parameters=factor_params,
             parameter_schema=factor_info.get('parameter_schema', {}),
             input_fields=factor_info.get('input_fields', []),
             output_type="single",
             is_active=True,
-            created_at=None,
-            updated_at=None
+            created_at=datetime.now(),  # 使用当前时间
+            updated_at=datetime.now()
         )
         
     except HTTPException:
@@ -187,8 +237,8 @@ async def get_factor_detail(
 
 @router.post("/{factor_id}/preview", response_model=FactorPreviewResult)
 async def preview_factor(
-    factor_id: str = Path(..., description="因子ID"),
-    preview_request: FactorPreviewRequest = None
+    preview_request: FactorPreviewRequest = None,
+    factor_id: str = Path(..., description="因子ID")
 ):
     """
     预览因子计算结果
@@ -240,8 +290,8 @@ async def preview_factor(
 
 @router.post("/{factor_id}/validate", response_model=ValidationResult)
 async def validate_factor_parameters(
-    factor_id: str = Path(..., description="因子ID"),
-    parameters: FactorParameters
+    parameters: FactorParameters,
+    factor_id: str = Path(..., description="因子ID")
 ):
     """验证因子参数配置"""
     try:
