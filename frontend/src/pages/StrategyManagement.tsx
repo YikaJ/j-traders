@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PlusIcon, PlayIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
 import { strategyManagementApi, Strategy, StrategyListResponse } from '../services/api';
 import StrategyCreateModal from '../components/StrategyCreateModal';
+import StrategyExecutionModal from '../components/StrategyExecutionModal';
 
 const StrategyManagement: React.FC = () => {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
@@ -11,6 +12,7 @@ const StrategyManagement: React.FC = () => {
   const [pageSize] = useState(10);
   const [keyword, setKeyword] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExecutionModal, setShowExecutionModal] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null);
 
   // 加载策略列表
@@ -37,19 +39,9 @@ const StrategyManagement: React.FC = () => {
   };
 
   // 执行策略
-  const handleExecuteStrategy = async (strategy: Strategy) => {
-    try {
-      const result = await strategyManagementApi.executeStrategy(strategy.strategy_id, {
-        dry_run: false,
-        save_result: true
-      });
-      
-      alert(`策略执行成功！选中${result.stock_count}只股票，耗时${result.execution_time.toFixed(2)}秒`);
-      loadStrategies(); // 刷新列表
-    } catch (error) {
-      console.error('执行策略失败:', error);
-      alert('执行策略失败，请重试');
-    }
+  const handleExecuteStrategy = (strategy: Strategy) => {
+    setSelectedStrategy(strategy);
+    setShowExecutionModal(true);
   };
 
   // 删除策略
@@ -284,6 +276,19 @@ const StrategyManagement: React.FC = () => {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreated={() => {
+          loadStrategies();
+        }}
+      />
+
+      {/* 策略执行模态框 */}
+      <StrategyExecutionModal
+        isOpen={showExecutionModal}
+        onClose={() => {
+          setShowExecutionModal(false);
+          setSelectedStrategy(null);
+        }}
+        strategy={selectedStrategy}
+        onExecuted={() => {
           loadStrategies();
         }}
       />
