@@ -13,7 +13,6 @@ from app.schemas.builtin_factors import (
     ValidationResult, FactorParameters, CalculationMethod, FactorCategory
 )
 from app.services.builtin_factor_engine import builtin_factor_engine
-from app.services.builtin_factor_service import FactorCategory
 
 router = APIRouter(prefix="/builtin-factors", tags=["内置因子库"])
 

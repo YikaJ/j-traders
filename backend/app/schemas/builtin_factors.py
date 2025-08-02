@@ -15,6 +15,9 @@ class FactorCategory(str, Enum):
     VOLUME = "volume"         # 价量类
     VOLATILITY = "volatility" # 波动率类
     VALUATION = "valuation"   # 估值类
+    ALPHA101_EXTENDED = "alpha101_extended"  # Alpha101扩展因子
+    ALPHA101_MORE_FACTORS = "alpha101_more_factors"  # Alpha101更多因子
+    ALPHA101_PHASE2 = "alpha101_phase2"  # Alpha101第二阶段因子
 
 
 class CalculationMethod(str, Enum):
