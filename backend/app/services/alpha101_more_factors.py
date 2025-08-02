@@ -753,10 +753,10 @@ class Alpha030ExtendedCalculator(Alpha101ExtendedCalculator):
 # 为了节省空间，我会创建更多因子的简化版本
 def create_more_alpha_calculators():
     """创建更多Alpha因子计算器的工厂函数"""
-    calculators = []
+    calculators = {}
     
     # 添加Alpha022-030的具体实现
-    calculators.extend([
+    alpha022_030_calculators = [
         Alpha022ExtendedCalculator(),
         Alpha023ExtendedCalculator(), 
         Alpha024ExtendedCalculator(),
@@ -766,11 +766,16 @@ def create_more_alpha_calculators():
         Alpha028ExtendedCalculator(),
         Alpha029ExtendedCalculator(),
         Alpha030ExtendedCalculator()
-    ])
+    ]
+    
+    # 将计算器添加到字典中
+    for calculator in alpha022_030_calculators:
+        calculators[calculator.factor_id] = calculator
     
     # Alpha031-050 简化实现占位符 (可后续详细实现)
     for i in range(31, 51):
         alpha_id = f"{i:03d}"
+        factor_id = f"alpha101_{alpha_id}"
         
         class AlphaCalculator(Alpha101ExtendedCalculator):
             def __init__(self, aid=alpha_id):
@@ -787,7 +792,7 @@ def create_more_alpha_calculators():
                 # 简化实现，返回基础因子
                 return self.tools.rank(df['close'].pct_change())
         
-        calculators.append(AlphaCalculator())
+        calculators[factor_id] = AlphaCalculator()
     
     return calculators
 

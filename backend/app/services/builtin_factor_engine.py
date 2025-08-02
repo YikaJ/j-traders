@@ -124,11 +124,18 @@ class BuiltinFactorEngine:
         factors = []
         
         for factor_id, factor_info in self.factor_registry.items():
+            # 处理类别，可能是枚举或字符串
+            category = factor_info['category']
+            if hasattr(category, 'value'):
+                category_value = category.value
+            else:
+                category_value = category
+            
             factors.append({
                 'factor_id': factor_id,
                 'name': factor_info['name'],
                 'display_name': factor_info['display_name'],
-                'category': factor_info['category'].value,
+                'category': category_value,
                 'description': factor_info['description'],
                 'input_fields': factor_info['input_fields'],
                 'default_parameters': factor_info['default_parameters']
