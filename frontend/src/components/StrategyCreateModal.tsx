@@ -264,7 +264,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <dialog className="modal">
+    <div className="modal modal-open">
       <div className="modal-box max-w-4xl max-h-[90vh] bg-base-100 border border-base-300 shadow-2xl">
         {/* 成功动画覆盖层 */}
         {showSuccessAnimation && (
@@ -616,7 +616,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
       <form method="dialog" className="modal-backdrop">
         <button>close</button>
       </form>
-    </dialog>
+    </div>
   );
 };
 
