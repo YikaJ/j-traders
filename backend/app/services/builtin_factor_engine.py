@@ -17,6 +17,9 @@ from .momentum_factor_service import MomentumFactorService
 from .volume_factor_service import VolumeFactorService
 from .alpha101_factor_service import alpha101_factor_service
 from .parametric_factor_service import parametric_factor_service
+from .alpha101_extended import alpha101_extended_service
+from .alpha101_more_factors import alpha101_more_factors_service
+from .alpha101_phase2 import alpha101_phase2_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,10 @@ class BuiltinFactorEngine:
         self.volume_service = VolumeFactorService()
         self.alpha101_service = alpha101_factor_service
         self.parametric_service = parametric_factor_service
+        # 添加扩展的Alpha101服务
+        self.alpha101_extended_service = alpha101_extended_service
+        self.alpha101_more_factors_service = alpha101_more_factors_service
+        self.alpha101_phase2_service = alpha101_phase2_service
         
         # 创建统一的因子注册表
         self.factor_registry = {}
@@ -84,6 +91,30 @@ class BuiltinFactorEngine:
                 **factor,
                 'service': self.parametric_service,
                 'category': factor['category']
+            }
+        
+        # 注册扩展的Alpha101因子
+        for factor in self.alpha101_extended_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_extended_service,
+                'category': 'alpha101_extended'
+            }
+        
+        # 注册更多Alpha101因子
+        for factor in self.alpha101_more_factors_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_more_factors_service,
+                'category': 'alpha101_more_factors'
+            }
+        
+        # 注册Alpha101 Phase2因子 (Alpha031-050)
+        for factor in self.alpha101_phase2_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_phase2_service,
+                'category': 'alpha101_phase2'
             }
         
         logger.info(f"已注册 {len(self.factor_registry)} 个内置因子")

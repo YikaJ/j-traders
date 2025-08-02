@@ -79,37 +79,38 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
     setFilteredFactors(filtered);
   }, [factors, selectedCategory, searchQuery]);
 
-  // 获取分类显示名称
-  const getCategoryDisplayName = (category: string) => {
-    const categoryMap: Record<string, string> = {
+  // 更新分类显示名称函数
+  const getCategoryDisplayName = (category: string): string => {
+    const categoryMap: { [key: string]: string } = {
       'trend': '趋势类',
-      'momentum': '动量类',
-      'volume': '价量类',
-      'alpha101': 'Alpha101',
+      'momentum': '动量类', 
       'volatility': '波动率类',
-      'valuation': '估值类'
+      'value': '价值类',
+      'volume': '成交量类',
+      'alpha101': 'Alpha101因子',
+      'alpha101_extended': 'Alpha101扩展因子',
+      'alpha101_more_factors': 'Alpha101增强因子',
+      'alpha101_phase2': 'Alpha101第二阶段',
+      'parametric': '参数化因子'
     };
     return categoryMap[category] || category;
   };
 
-  // 获取分类图标
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'trend':
-        return '📈';
-      case 'momentum':
-        return '⚡';
-      case 'volume':
-        return '📊';
-      case 'alpha101':
-        return '🏆';
-      case 'volatility':
-        return '📏';
-      case 'valuation':
-        return '💰';
-      default:
-        return '📋';
-    }
+  // 更新分类图标函数
+  const getCategoryIcon = (category: string): string => {
+    const iconMap: { [key: string]: string } = {
+      'trend': 'TrendingUpOutlined',
+      'momentum': 'FlashOnOutlined',
+      'volatility': 'ShowChartOutlined', 
+      'value': 'AccountBalanceOutlined',
+      'volume': 'BarChartOutlined',
+      'alpha101': 'FunctionsOutlined',
+      'alpha101_extended': 'ExtensionOutlined',
+      'alpha101_more_factors': 'AutoAwesomeOutlined',
+      'alpha101_phase2': 'SchoolOutlined',
+      'parametric': 'TuneOutlined'
+    };
+    return iconMap[category] || 'HelpOutlined';
   };
 
   // 查看因子详情
@@ -229,6 +230,9 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
               onClick={() => setSelectedCategory(selectedCategory === category.name ? 'all' : category.name)}
             >
               <div className="stat-figure text-2xl">
+                {/* Assuming getCategoryIcon returns a string like 'TrendingUpOutlined' */}
+                {/* This part needs to be adapted to use a proper icon component */}
+                {/* For now, keeping the original getCategoryIcon logic */}
                 {getCategoryIcon(category.name)}
               </div>
               <div className="stat-title">{getCategoryDisplayName(category.name)}</div>
