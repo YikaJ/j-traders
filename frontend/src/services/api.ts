@@ -743,6 +743,91 @@ export const stockApi = {
   },
 };
 
+// 数据字段配置相关接口
+export interface DataField {
+  field_id: string;
+  field_name: string;
+  display_name: string;
+  description: string;
+  category: DataFieldCategory;
+  field_type: DataFieldType;
+  unit?: string;
+  is_required: boolean;
+  is_common: boolean;
+  tushare_field?: string;
+  example_value?: string;
+  validation_rules?: Record<string, any>;
+}
+
+export interface DataFieldConfig {
+  category: DataFieldCategory;
+  fields: DataField[];
+  description: string;
+}
+
+export enum DataFieldCategory {
+  PRICE = "price",
+  VOLUME = "volume", 
+  TECHNICAL = "technical",
+  FUNDAMENTAL = "fundamental",
+  DERIVED = "derived"
+}
+
+export enum DataFieldType {
+  NUMERIC = "numeric",
+  STRING = "string",
+  DATE = "date",
+  BOOLEAN = "boolean"
+}
+
+export interface FactorInputFieldsResponse {
+  categories: DataFieldConfig[];
+  total_fields: number;
+}
+
+export interface FieldValidationResult {
+  status: "valid" | "warning" | "error";
+  message: string;
+}
+
+// 数据字段配置API
+export const dataFieldApi = {
+  // 获取因子输入字段配置
+  getFactorInputFields: async (
+    categories?: DataFieldCategory[],
+    includeCommonOnly: boolean = true
+  ): Promise<FactorInputFieldsResponse> => {
+    const params: Record<string, any> = {
+      include_common_only: includeCommonOnly
+    };
+    
+    if (categories && categories.length > 0) {
+      // FastAPI需要重复参数名来处理数组
+      categories.forEach(category => {
+        if (!params.categories) params.categories = [];
+        params.categories.push(category);
+      });
+    }
+    
+    return api.get('/data/fields', { params });
+  },
+
+  // 获取常用字段
+  getCommonFields: async (): Promise<DataField[]> => {
+    return api.get('/data/fields/common');
+  },
+
+  // 根据字段ID获取字段信息
+  getFieldById: async (fieldId: string): Promise<DataField> => {
+    return api.get(`/data/fields/${fieldId}`);
+  },
+
+  // 验证字段组合
+  validateFieldCombination: async (fieldIds: string[]): Promise<FieldValidationResult> => {
+    return api.post('/data/fields/validate', fieldIds);
+  }
+};
+
 // 健康检查
 export const healthCheck = async () => {
   return api.get('/test');
