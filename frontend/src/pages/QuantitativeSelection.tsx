@@ -13,14 +13,14 @@ import {
 } from '@heroicons/react/24/outline';
 
 // 组件导入
-import BuiltinFactorLibrary from '../components/BuiltinFactorLibrary';
+import FactorLibrary from '../components/FactorLibrary';
 import StrategyConfigManager from '../components/StrategyConfigManager';
 import WeightConfigPanel from '../components/WeightConfigPanel';
 import FactorAnalysisPanel from '../components/FactorAnalysisPanel';
 
 // API导入
 import {
-  builtinFactorApi,
+  factorApi, // 替换 builtinFactorApi
   strategyConfigApi,
   strategyApi,
   weightApi,
@@ -102,7 +102,7 @@ const QuantitativeSelection: React.FC = () => {
     }
 
     setSelectedFactors(updatedFactors);
-    showMessage('success', `已添加因子: ${factor.factor_name}`);
+    showMessage('success', `已添加因子: ${factor.name}`);
   };
 
   // 移除因子
@@ -142,7 +142,7 @@ const QuantitativeSelection: React.FC = () => {
   const handleNormalizeWeights = async () => {
     try {
       const result = await weightApi.normalizeWeights(selectedFactors);
-      setSelectedFactors(result.factors);
+      setSelectedFactors(Array.isArray(result) ? result : []);
       showMessage('success', '权重已标准化');
     } catch (error) {
       console.error('标准化权重失败:', error);
@@ -208,7 +208,7 @@ const QuantitativeSelection: React.FC = () => {
   const getTotalWeight = () => {
     return selectedFactors
       .filter(f => f.is_enabled)
-      .reduce((sum, factor) => sum + factor.weight, 0);
+      .reduce((sum, factor) => sum + (factor.weight ?? 0), 0);
   };
 
   // 检查权重是否有效
@@ -330,7 +330,7 @@ const QuantitativeSelection: React.FC = () => {
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium text-sm truncate">{factor.factor_name}</h4>
+                    <h4 className="font-medium text-sm truncate">{factor.name}</h4>
                     <div className="flex gap-1">
                       <input
                         type="checkbox"
@@ -360,7 +360,7 @@ const QuantitativeSelection: React.FC = () => {
                       disabled={!factor.is_enabled}
                     />
                     <span className="text-xs w-12 text-right">
-                      {(factor.weight * 100).toFixed(0)}%
+                      {((factor.weight ?? 0) * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
@@ -385,7 +385,7 @@ const QuantitativeSelection: React.FC = () => {
       {/* 主要内容区域 */}
       <div className="min-h-[600px]">
         {activeTab === 'factor-library' && (
-          <BuiltinFactorLibrary
+          <FactorLibrary
             mode="selection"
             onFactorSelect={handleFactorSelect}
             selectedFactors={selectedFactors}

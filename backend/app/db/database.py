@@ -54,8 +54,10 @@ def init_db():
     创建所有表
     """
     try:
-        # 导入所有模型以确保它们被注册到Base.metadata
-        from app.db.models import stock, market_data, factor, watchlist, strategy
+        # 直接导入所有模型以确保它们被注册到Base.metadata
+        from app.db.models.stock import Stock, StockDaily, MarketIndex
+        from app.db.models.factor import Factor, FactorFormulaHistory, Strategy, StrategyExecution, SelectionResult, FactorValue
+        from app.db.models.watchlist import Watchlist, WatchlistGroup, WatchlistGroupMember
         
         # 创建所有表
         Base.metadata.create_all(bind=engine)

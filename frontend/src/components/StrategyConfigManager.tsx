@@ -22,7 +22,7 @@ import {
   WeightPreset,
   StrategyTemplate
 } from '../services/api';
-import BuiltinFactorLibrary from './BuiltinFactorLibrary';
+import FactorLibrary from './FactorLibrary';
 
 interface StrategyConfigManagerProps {
   onStrategySelect?: (strategy: StrategyConfig) => void;
@@ -711,7 +711,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
             </div>
             
             <div className="h-full overflow-hidden">
-              <BuiltinFactorLibrary
+              <FactorLibrary
                 mode="selection"
                 selectedFactors={strategyForm.factors}
                 onFactorSelect={(factor) => {
