@@ -10,6 +10,7 @@ import {
 import Dashboard from './pages/Dashboard';
 import QuantitativeSelection from './pages/QuantitativeSelection';
 import Watchlist from './pages/Watchlist';
+import StrategyManagement from './pages/StrategyManagement';
 
 // 通用组件
 import ThemeToggle from './components/common/ThemeToggle';
@@ -33,6 +34,12 @@ const menuItems = [
     label: '自选股',
     path: '/watchlist'
   },
+  {
+    key: '/strategy',
+    icon: CurrencyDollarIcon,
+    label: '策略管理',
+    path: '/strategy'
+  }
 ];
 
 const AppContent: React.FC = () => {
@@ -82,9 +89,10 @@ const AppContent: React.FC = () => {
           {/* Page content */}
           <main className="flex-1 p-6">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/quantitative" element={<QuantitativeSelection />} />
-              <Route path="/watchlist" element={<Watchlist />} />
+                              <Route path="/" element={<Dashboard />} />
+                <Route path="/quantitative" element={<QuantitativeSelection />} />
+                <Route path="/watchlist" element={<Watchlist />} />
+                <Route path="/strategy" element={<StrategyManagement />} />
             </Routes>
           </main>
         </div>
