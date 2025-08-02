@@ -16,15 +16,11 @@ async def test_endpoint():
 
 
 # 包含所有路由模块
-from app.api.v1.endpoints import market, watchlist, factors, strategies, stocks
-from app.api.v1 import builtin_factors, strategy_configs, strategy_templates, factor_analysis
+from app.api.v1.endpoints import market, watchlist, factors, strategies, stocks, strategy_configs
 
 api_router.include_router(market.router, prefix="/market", tags=["market"])
 api_router.include_router(watchlist.router, prefix="/watchlist", tags=["watchlist"])
 api_router.include_router(factors.router, prefix="/factors", tags=["factors"])
 api_router.include_router(strategies.router, prefix="/strategies", tags=["strategies"])
 api_router.include_router(stocks.router, prefix="/stocks", tags=["stocks"])
-api_router.include_router(builtin_factors.router, tags=["builtin_factors"])
-api_router.include_router(strategy_configs.router, tags=["strategy_configs"])
-api_router.include_router(strategy_templates.router, tags=["strategy_templates"])
-api_router.include_router(factor_analysis.router, tags=["factor_analysis"])
+api_router.include_router(strategy_configs.router, prefix="/strategy-configs", tags=["strategy-configs"])

@@ -152,3 +152,59 @@ class StrategyExecutionResponse(BaseModel):
     resultCount: int
     results: List[SelectionResult]
     statistics: Dict[str, Any]
+
+
+# 权重预设相关模型
+class WeightPreset(BaseModel):
+    """权重预设模型"""
+    id: str
+    name: str
+    description: str
+    applicable_categories: List[str]
+    weights: Dict[str, float]  # 因子ID到权重的映射
+    is_default: bool = False
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class WeightPresetCreate(BaseModel):
+    """创建权重预设请求模型"""
+    name: str
+    description: str
+    applicable_categories: List[str]
+    weights: Dict[str, float]
+    is_default: bool = False
+
+
+class WeightPresetUpdate(BaseModel):
+    """更新权重预设请求模型"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    applicable_categories: Optional[List[str]] = None
+    weights: Optional[Dict[str, float]] = None
+    is_default: Optional[bool] = None
+
+
+class WeightValidationResult(BaseModel):
+    """权重验证结果"""
+    is_valid: bool
+    total_weight: float
+    message: str
+    warnings: List[str] = []
+
+
+class WeightOptimizationResult(BaseModel):
+    """权重优化结果"""
+    optimized_factors: List[Dict[str, Any]]  # 优化后的因子列表
+    optimization_method: str
+    performance_metrics: Dict[str, float]
+    recommendations: List[str]
+    analysis_details: Dict[str, Any]
+
+
+class WeightSuggestionRequest(BaseModel):
+    """权重建议请求模型"""
+    factors: List[Dict[str, Any]]  # 因子列表
+    optimization_method: str = "correlation_adjusted"
+    target_volatility: Optional[float] = None
+    target_return: Optional[float] = None

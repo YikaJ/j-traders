@@ -34,7 +34,7 @@ api.interceptors.response.use(
 
 // ====== 接口类型定义 ======
 
-// 市场数据相关接口
+// 市场指数相关接口
 export interface MarketIndex {
   symbol: string;
   name: string;
@@ -42,54 +42,39 @@ export interface MarketIndex {
   change: number;
   changePercent: number;
   volume: number;
-  amount?: number;
-  tradeDate?: string;
 }
 
-export interface StockQuote {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  volume?: number;
-  amount?: number;
-}
-
-// 内置因子相关接口
-export interface BuiltinFactor {
+// 因子相关接口（统一）
+export interface Factor {
   factor_id: string;
   name: string;
   display_name: string;
   description: string;
-  category: 'trend' | 'momentum' | 'volume';
-  calculation_method: 'pandas' | 'talib' | 'custom';
+  category: string;
   formula: string;
-  default_parameters: Record<string, any>;
-  parameter_schema: Record<string, any>;
   input_fields: string[];
-  output_type: string;
+  default_parameters: Record<string, any>;
+  parameter_schema?: Record<string, any>;
+  calculation_method: string;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  is_builtin: boolean;
+  version?: string;
+  usage_count?: number;
+  last_used_at?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface FactorParameters {
-  period?: number;
-  fast_period?: number;
-  slow_period?: number;
-  signal_period?: number;
-  multiplier?: number;
-  custom_params?: Record<string, any>;
+  [key: string]: any;
 }
 
 export interface SelectedFactor {
   factor_id: string;
-  factor_type: 'builtin' | 'custom';
-  factor_name: string;
-  parameters: FactorParameters;
-  weight: number;
-  is_enabled: boolean;
+  name?: string;
+  weight?: number;
+  is_enabled?: boolean;
+  parameters?: FactorParameters;
 }
 
 // 策略配置相关接口
@@ -212,18 +197,83 @@ export interface WeightOptimizationResult {
   analysis_details: Record<string, any>;
 }
 
+export interface FactorFormulaUpdate {
+  formula: string;
+  description?: string;
+}
+
+export interface FactorFormulaResponse {
+  factor_id: string;
+  formula: string;
+  description: string;
+  updated_at: string;
+  success: boolean;
+}
+
+export interface FormulaValidationResult {
+  is_valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface FormulaHistoryEntry {
+  timestamp: string;
+  old_formula: string;
+  new_formula: string;
+  description_change: {
+    old: string;
+    new: string;
+  };
+}
+
+// 自定义因子相关接口
+export interface CustomFactorCreateRequest {
+  factor_id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  formula: string;
+  input_fields: string[];
+  default_parameters: Record<string, any>;
+  calculation_method: string;
+}
+
+export interface CustomFactorUpdateRequest {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  category?: string;
+  formula?: string;
+  input_fields?: string[];
+  default_parameters?: Record<string, any>;
+  calculation_method?: string;
+}
+
+export interface CustomFactorResponse {
+  factor_id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  formula: string;
+  input_fields: string[];
+  default_parameters: Record<string, any>;
+  calculation_method: string;
+}
+
 // ====== API 接口 ======
 
 // 市场数据API
 export const marketApi = {
   // 获取市场指数
-  getMarketIndices: async (tradeDate?: string): Promise<MarketIndex[]> => {
+  getMarketIndices: async (tradeDate?: string): Promise<any[]> => {
     const params = tradeDate ? { trade_date: tradeDate } : {};
     return api.get('/market/indices', { params });
   },
 
   // 获取股票行情
-  getStockQuotes: async (symbols?: string[]): Promise<StockQuote[]> => {
+  getStockQuotes: async (symbols?: string[]): Promise<any[]> => {
     const params = symbols ? { symbols: symbols.join(',') } : {};
     return api.get('/market/quotes', { params });
   },
@@ -235,67 +285,67 @@ export const marketApi = {
   },
 };
 
-// 内置因子库API
-export const builtinFactorApi = {
-  // 获取所有内置因子
-  getBuiltinFactors: async (category?: string, search?: string): Promise<BuiltinFactor[]> => {
+// 因子API（统一）
+export const factorApi = {
+  // 获取所有因子
+  getFactors: async (category?: string, search?: string): Promise<Factor[]> => {
     const params: any = {};
     if (category) params.category = category;
     if (search) params.search = search;
-    return api.get('/builtin-factors/', { params });
+    return api.get('/factors/', { params });
   },
 
   // 获取因子分类
-  getFactorCategories: async () => {
-    return api.get('/builtin-factors/categories');
+  getFactorCategories: async (): Promise<string[]> => {
+    return api.get('/factors/categories/');
   },
 
   // 获取指定因子详情
-  getFactorInfo: async (factorId: string): Promise<BuiltinFactor> => {
-    return api.get(`/builtin-factors/${factorId}`);
+  getFactorInfo: async (factorId: string): Promise<Factor> => {
+    return api.get(`/factors/${factorId}`);
   },
 
-  // 预览因子计算结果
-  previewFactor: async (factorId: string, sampleData: any, parameters?: FactorParameters) => {
-    return api.post(`/builtin-factors/${factorId}/preview`, {
-      sample_data: sampleData,
-      parameters: parameters || {}
-    });
+  // 创建因子
+  createFactor: async (factorData: Partial<Factor>): Promise<Factor> => {
+    return api.post('/factors/', factorData);
   },
 
-  // 验证因子参数
-  validateFactorParameters: async (factorId: string, parameters: FactorParameters) => {
-    return api.post(`/builtin-factors/${factorId}/validate`, { parameters });
+  // 更新因子
+  updateFactor: async (factorId: string, factorData: Partial<Factor>): Promise<Factor> => {
+    return api.put(`/factors/${factorId}`, factorData);
   },
 
-  // 计算单个因子
+  // 删除因子
+  deleteFactor: async (factorId: string): Promise<{ success: boolean; message: string }> => {
+    return api.delete(`/factors/${factorId}`);
+  },
+
+  // 计算因子（可选实现，需后端支持）
   calculateFactor: async (factorId: string, stockData: any, parameters?: FactorParameters) => {
-    return api.post('/builtin-factors/calculate', {
-      factor_id: factorId,
+    return api.post(`/factors/${factorId}/test`, {
       stock_data: stockData,
       parameters: parameters || {}
     });
   },
 
-  // 批量计算因子
-  batchCalculateFactors: async (factorConfigs: Array<{
-    factor_id: string;
-    parameters?: FactorParameters;
-  }>, stockData: any) => {
-    return api.post('/builtin-factors/batch-calculate', {
-      factor_configs: factorConfigs,
-      stock_data: stockData
-    });
+  // 获取因子公式历史
+  getFormulaHistory: async (factorId: string) => {
+    return api.get(`/factors/${factorId}/formula-history`);
   },
 
-  // 获取引擎状态
-  getEngineStatus: async () => {
-    return api.get('/builtin-factors/engine/status');
+  // 验证因子公式
+  validateFactorFormula: async (factorId: string, formula: string): Promise<FormulaValidationResult> => {
+    return api.post(`/factors/${factorId}/validate-formula`, { formula });
   },
 
-  // 清除缓存
-  clearCache: async () => {
-    return api.post('/builtin-factors/engine/clear-cache');
+  // 更新因子公式
+  updateFactorFormula: async (factorId: string, update: FactorFormulaUpdate): Promise<Factor> => {
+    return api.put(`/factors/${factorId}/formula`, update);
+  },
+
+  // 重置因子公式
+  resetFactorFormula: async (factorId: string): Promise<{ success: boolean; message: string }> => {
+    return api.post(`/factors/${factorId}/reset-formula`);
   },
 };
 
