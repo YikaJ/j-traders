@@ -31,6 +31,8 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
   const [showFactorModal, setShowFactorModal] = useState(false);
   const [showParameterModal, setShowParameterModal] = useState(false);
   const [parameterForm, setParameterForm] = useState<FactorParameters>({});
+  const [factorDetails, setFactorDetails] = useState<any>(null);
+  const [showFormulaModal, setShowFormulaModal] = useState(false);
 
   // 加载因子数据
   const loadFactors = async () => {
@@ -82,7 +84,10 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
     const categoryMap: Record<string, string> = {
       'trend': '趋势类',
       'momentum': '动量类',
-      'volume': '价量类'
+      'volume': '价量类',
+      'alpha101': 'Alpha101',
+      'volatility': '波动率类',
+      'valuation': '估值类'
     };
     return categoryMap[category] || category;
   };
@@ -96,6 +101,12 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
         return '⚡';
       case 'volume':
         return '📊';
+      case 'alpha101':
+        return '🏆';
+      case 'volatility':
+        return '📏';
+      case 'valuation':
+        return '💰';
       default:
         return '📋';
     }
@@ -105,6 +116,19 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
   const handleViewFactor = (factor: BuiltinFactor) => {
     setSelectedFactor(factor);
     setShowFactorModal(true);
+  };
+
+  // 查看因子公式
+  const handleViewFormula = async (factor: BuiltinFactor) => {
+    try {
+      // 获取因子详细信息，包括公式
+      const response = await builtinFactorApi.getFactorInfo(factor.factor_id);
+      setFactorDetails(response);
+      setSelectedFactor(factor);
+      setShowFormulaModal(true);
+    } catch (error) {
+      console.error('获取因子详情失败:', error);
+    }
   };
 
   // 添加因子到策略
@@ -236,6 +260,9 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
                       factor.category === 'trend' ? 'badge-info' :
                       factor.category === 'momentum' ? 'badge-warning' :
                       factor.category === 'volume' ? 'badge-success' :
+                      factor.category === 'alpha101' ? 'badge-secondary' :
+                      factor.category === 'volatility' ? 'badge-accent' :
+                      factor.category === 'valuation' ? 'badge-primary' :
                       'badge-neutral'
                     }`}>
                       {getCategoryDisplayName(factor.category)}
@@ -266,13 +293,22 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
 
                 {/* 操作按钮 */}
                 <div className="card-actions justify-between">
-                  <button
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => handleViewFactor(factor)}
-                  >
-                    <EyeIcon className="w-3 h-3" />
-                    查看
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => handleViewFactor(factor)}
+                    >
+                      <EyeIcon className="w-3 h-3" />
+                      查看
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => handleViewFormula(factor)}
+                    >
+                      <InformationCircleIcon className="w-3 h-3" />
+                      公式
+                    </button>
+                  </div>
 
                   {mode === 'selection' && (
                     <button
@@ -523,6 +559,143 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
               >
                 添加因子
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 因子公式模态框 */}
+      {showFormulaModal && selectedFactor && (
+        <div className="modal modal-open">
+          <div className="modal-box w-11/12 max-w-4xl">
+            <h3 className="font-bold text-lg mb-4">
+              {selectedFactor.display_name} - 计算公式
+            </h3>
+
+            <div className="space-y-4">
+              {/* 基本信息 */}
+              <div className="bg-base-200 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2">基本信息</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">因子ID：</span>
+                    <code className="bg-base-300 px-2 py-1 rounded">{selectedFactor.factor_id}</code>
+                  </div>
+                  <div>
+                    <span className="font-medium">分类：</span>
+                    <span className={`badge badge-sm ml-2 ${
+                      selectedFactor.category === 'trend' ? 'badge-info' :
+                      selectedFactor.category === 'momentum' ? 'badge-warning' :
+                      selectedFactor.category === 'volume' ? 'badge-success' :
+                      selectedFactor.category === 'alpha101' ? 'badge-secondary' :
+                      'badge-neutral'
+                    }`}>
+                      {getCategoryDisplayName(selectedFactor.category)}
+                    </span>
+                  </div>
+                  <div className="md:col-span-2">
+                    <span className="font-medium">描述：</span>
+                    <p className="mt-1 text-base-content/80">{selectedFactor.description}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 计算公式 */}
+              {factorDetails?.formula && (
+                <div className="bg-base-200 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-2">计算公式</h4>
+                  <div className="bg-base-300 p-3 rounded-lg">
+                    <code className="text-sm font-mono text-wrap break-all">
+                      {factorDetails.formula}
+                    </code>
+                  </div>
+                </div>
+              )}
+
+              {/* 输入字段 */}
+              <div className="bg-base-200 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2">输入字段</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedFactor.input_fields?.map((field, index) => (
+                    <span key={index} className="badge badge-outline">
+                      {field}
+                    </span>
+                  )) || <span className="text-base-content/60">无特定要求</span>}
+                </div>
+              </div>
+
+              {/* 参数配置 */}
+              {selectedFactor.default_parameters && Object.keys(selectedFactor.default_parameters).length > 0 && (
+                <div className="bg-base-200 p-4 rounded-lg">
+                  <h4 className="font-semibold mb-2">可配置参数</h4>
+                  <div className="space-y-2">
+                    {Object.entries(selectedFactor.default_parameters).map(([key, param]: [string, any]) => (
+                      <div key={key} className="flex justify-between items-center text-sm">
+                        <div>
+                          <span className="font-medium">{key}：</span>
+                          <span className="text-base-content/70 ml-1">
+                            {param.description || '无描述'}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="badge badge-ghost badge-sm">
+                            类型: {param.type}
+                          </span>
+                          <span className="badge badge-ghost badge-sm">
+                            默认: {param.default}
+                          </span>
+                          {param.minimum !== undefined && param.maximum !== undefined && (
+                            <span className="badge badge-ghost badge-sm">
+                              范围: {param.minimum}-{param.maximum}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Alpha101特殊说明 */}
+              {selectedFactor.category === 'alpha101' && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+                  <h4 className="font-semibold mb-2 text-amber-800 dark:text-amber-200">
+                    🏆 Alpha101因子说明
+                  </h4>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    这是基于WorldQuant 101 Formulaic Alphas论文的成熟量化因子，
+                    在实际交易中具有良好的历史表现。该因子主要捕捉{
+                      selectedFactor.category === 'trend' ? '价格趋势' :
+                      selectedFactor.category === 'momentum' ? '价格动量' :
+                      selectedFactor.category === 'volume' ? '量价关系' :
+                      '市场'
+                    }特征。
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-action">
+              <button
+                className="btn"
+                onClick={() => {
+                  setShowFormulaModal(false);
+                  setFactorDetails(null);
+                }}
+              >
+                关闭
+              </button>
+              {mode === 'selection' && !isFactorSelected(selectedFactor.factor_id) && (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowFormulaModal(false);
+                    handleAddFactor(selectedFactor);
+                  }}
+                >
+                  添加到策略
+                </button>
+              )}
             </div>
           </div>
         </div>

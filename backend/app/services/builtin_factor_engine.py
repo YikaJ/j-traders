@@ -13,8 +13,10 @@ import time
 
 from .builtin_factor_service import FactorCategory
 from .builtin_factor_service import TrendFactorService
-from .momentum_factor_service import MomentumFactorService  
+from .momentum_factor_service import MomentumFactorService
 from .volume_factor_service import VolumeFactorService
+from .alpha101_factor_service import alpha101_factor_service
+from .parametric_factor_service import parametric_factor_service
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,8 @@ class BuiltinFactorEngine:
         self.trend_service = TrendFactorService()
         self.momentum_service = MomentumFactorService()
         self.volume_service = VolumeFactorService()
+        self.alpha101_service = alpha101_factor_service
+        self.parametric_service = parametric_factor_service
         
         # 创建统一的因子注册表
         self.factor_registry = {}
@@ -64,6 +68,22 @@ class BuiltinFactorEngine:
                 **factor,
                 'service': self.volume_service,
                 'category': FactorCategory.VOLUME
+            }
+        
+        # 注册Alpha101因子
+        for factor in self.alpha101_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_service,
+                'category': 'alpha101'
+            }
+        
+        # 注册参数化因子
+        for factor in self.parametric_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.parametric_service,
+                'category': factor['category']
             }
         
         logger.info(f"已注册 {len(self.factor_registry)} 个内置因子")

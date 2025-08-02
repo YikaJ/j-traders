@@ -22,6 +22,7 @@ import {
   WeightPreset,
   StrategyTemplate
 } from '../services/api';
+import BuiltinFactorLibrary from './BuiltinFactorLibrary';
 
 interface StrategyConfigManagerProps {
   onStrategySelect?: (strategy: StrategyConfig) => void;
@@ -42,6 +43,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showFactorSelectionModal, setShowFactorSelectionModal] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState<string>('all');
@@ -226,6 +228,20 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
       max_results: strategy.max_results
     });
     setShowWeightModal(true);
+  };
+
+  // 处理因子选择
+  const handleFactorSelect = (factor: SelectedFactor) => {
+    const updatedFactors = [...strategyForm.factors, factor];
+    setStrategyForm({
+      ...strategyForm,
+      factors: updatedFactors
+    });
+  };
+
+  // 打开因子选择模态框
+  const handleOpenFactorSelection = () => {
+    setShowFactorSelectionModal(true);
   };
 
   // 应用权重预设
@@ -598,9 +614,18 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
 
               {/* 因子配置 */}
               <div>
-                <label className="label">
-                  <span className="label-text">已选择的因子 ({strategyForm.factors.length})</span>
-                </label>
+                <div className="flex justify-between items-center">
+                  <label className="label">
+                    <span className="label-text">已选择的因子 ({strategyForm.factors.length})</span>
+                  </label>
+                  <button
+                    className="btn btn-sm btn-outline"
+                    onClick={handleOpenFactorSelection}
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    选择因子
+                  </button>
+                </div>
                 
                 {strategyForm.factors.length > 0 ? (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -666,6 +691,34 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
               >
                 {showCreateModal ? '创建策略' : '保存修改'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 因子选择模态框 */}
+      {showFactorSelectionModal && (
+        <div className="modal modal-open">
+          <div className="modal-box w-11/12 max-w-6xl h-5/6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg">选择因子</h3>
+              <button
+                className="btn btn-sm btn-circle"
+                onClick={() => setShowFactorSelectionModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="h-full overflow-hidden">
+              <BuiltinFactorLibrary
+                mode="selection"
+                selectedFactors={strategyForm.factors}
+                onFactorSelect={(factor) => {
+                  handleFactorSelect(factor);
+                  setShowFactorSelectionModal(false);
+                }}
+              />
             </div>
           </div>
         </div>
