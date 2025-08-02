@@ -1,59 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import {
-  PlayIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
-  StarIcon,
-  AdjustmentsHorizontalIcon,
   BeakerIcon
 } from '@heroicons/react/24/outline';
 
 // 组件导入
 import FactorLibrary from '../components/FactorLibrary';
-import StrategyConfigManager from '../components/StrategyConfigManager';
 import WeightConfigPanel from '../components/WeightConfigPanel';
 import FactorAnalysisPanel from '../components/FactorAnalysisPanel';
-import SelectionWizard from '../components/quantitative/SelectionWizard';
 import SelectedFactorsOverview from '../components/quantitative/SelectedFactorsOverview';
-import StrategyResultModal from '../components/quantitative/StrategyResultModal';
 import MessageAlert from '../components/dashboard/MessageAlert';
 
 // API导入
 import {
-  factorApi,
-  strategyConfigApi,
-  strategyApi,
   weightApi,
-  StrategyConfig,
   SelectedFactor,
-  StrategyResult,
   WeightPreset
 } from '../services/api';
 
 const QuantitativeSelection: React.FC = () => {
   // 主要状态
-  const [activeTab, setActiveTab] = useState<'factor-library' | 'strategy-config' | 'selection-wizard' | 'weight-config' | 'factor-analysis'>('factor-library');
+  const [activeTab, setActiveTab] = useState<'factor-library' | 'weight-config' | 'factor-analysis'>('factor-library');
   const [selectedFactors, setSelectedFactors] = useState<SelectedFactor[]>([]);
-  const [currentStrategy, setCurrentStrategy] = useState<StrategyConfig | null>(null);
-  const [strategyResults, setStrategyResults] = useState<StrategyResult[]>([]);
   const [weightPresets, setWeightPresets] = useState<WeightPreset[]>([]);
 
   // UI状态
   const [loading, setLoading] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  const [showResultModal, setShowResultModal] = useState(false);
-
-  // 表单状态
-  const [executeForm, setExecuteForm] = useState({
-    max_results: 50,
-    filters: {
-      exclude_st: true,
-      exclude_new_stock: true,
-      min_market_cap: 1000000,
-      max_pe: 100,
-      min_roe: 0
-    }
-  });
 
   // 消息状态
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', text: string } | null>(null);
@@ -150,60 +122,6 @@ const QuantitativeSelection: React.FC = () => {
     }
   };
 
-  // 执行策略
-  const handleExecuteStrategy = async (strategy?: StrategyConfig) => {
-    try {
-      setExecuting(true);
-
-      const factors = strategy ? strategy.factors : selectedFactors;
-      const maxResults = strategy ? strategy.max_results : executeForm.max_results;
-
-      if (factors.length === 0) {
-        showMessage('warning', '请先选择至少一个因子');
-        return;
-      }
-
-      const results = await strategyApi.executeStrategy({
-        factors: factors,
-        filters: executeForm.filters,
-        max_results: maxResults
-      });
-
-      setStrategyResults(results);
-      setShowResultModal(true);
-      
-      // 如果使用的是策略，记录使用次数
-      if (strategy) {
-        await strategyConfigApi.recordStrategyUsage(strategy.id);
-      }
-
-      showMessage('success', `策略执行完成，找到 ${results.length} 只股票`);
-    } catch (error) {
-      console.error('执行策略失败:', error);
-      showMessage('error', '策略执行失败，请检查网络连接或重试');
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  // 选择策略
-  const handleStrategySelect = (strategy: StrategyConfig) => {
-    setCurrentStrategy(strategy);
-    setSelectedFactors(strategy.factors);
-    setActiveTab('selection-wizard');
-    showMessage('info', `已加载策略: ${strategy.name}`);
-  };
-
-  // 快速执行策略
-  const handleQuickExecuteStrategy = (strategy: StrategyConfig) => {
-    setCurrentStrategy(strategy);
-    setExecuteForm({
-      ...executeForm,
-      max_results: strategy.max_results
-    });
-    handleExecuteStrategy(strategy);
-  };
-
   // 计算总权重
   const getTotalWeight = () => {
     return selectedFactors
@@ -232,27 +150,13 @@ const QuantitativeSelection: React.FC = () => {
             <ChartBarIcon className="w-4 h-4 mr-2" />
             因子库
           </a>
-          <a
-            className={`tab ${activeTab === 'strategy-config' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('strategy-config')}
-          >
-            <Cog6ToothIcon className="w-4 h-4 mr-2" />
-            策略管理
-          </a>
-          <a
-            className={`tab ${activeTab === 'selection-wizard' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('selection-wizard')}
-          >
-            <StarIcon className="w-4 h-4 mr-2" />
-            选股向导
-          </a>
           {selectedFactors.length > 0 && (
             <>
               <a
                 className={`tab ${activeTab === 'weight-config' ? 'tab-active' : ''}`}
                 onClick={() => setActiveTab('weight-config')}
               >
-                <AdjustmentsHorizontalIcon className="w-4 h-4 mr-2" />
+                <BeakerIcon className="w-4 h-4 mr-2" />
                 权重配置
               </a>
               <a
@@ -265,32 +169,12 @@ const QuantitativeSelection: React.FC = () => {
             </>
           )}
         </div>
-
-        {/* 快速操作 */}
-        <div className="flex gap-2">
-          {selectedFactors.length > 0 && (
-            <button
-              className={`btn btn-primary btn-sm ${executing ? 'loading' : ''}`}
-              onClick={() => handleExecuteStrategy()}
-              disabled={executing || selectedFactors.length === 0}
-            >
-              {executing ? (
-                '执行中...'
-              ) : (
-                <>
-                  <PlayIcon className="w-4 h-4" />
-                  快速执行
-                </>
-              )}
-            </button>
-          )}
-        </div>
       </div>
 
       {/* 已选因子概览 */}
       <SelectedFactorsOverview
         selectedFactors={selectedFactors}
-        currentStrategy={currentStrategy}
+        currentStrategy={null}
         isWeightValid={isWeightValid}
         getTotalWeight={getTotalWeight}
         onRemoveFactor={handleRemoveFactor}
@@ -309,32 +193,11 @@ const QuantitativeSelection: React.FC = () => {
           />
         )}
 
-        {activeTab === 'strategy-config' && (
-          <StrategyConfigManager
-            onStrategySelect={handleStrategySelect}
-            onExecuteStrategy={handleQuickExecuteStrategy}
-          />
-        )}
-
-        {activeTab === 'selection-wizard' && (
-          <SelectionWizard
-            selectedFactors={selectedFactors}
-            executeForm={executeForm}
-            executing={executing}
-            isWeightValid={isWeightValid}
-            getTotalWeight={getTotalWeight}
-            onExecuteStrategy={() => handleExecuteStrategy()}
-            onNormalizeWeights={handleNormalizeWeights}
-            onSetExecuteForm={setExecuteForm}
-            onSetActiveTab={setActiveTab}
-          />
-        )}
-
         {activeTab === 'weight-config' && (
           <WeightConfigPanel
             factors={selectedFactors}
             onFactorsChange={setSelectedFactors}
-            onClose={() => setActiveTab('selection-wizard')}
+            onClose={() => setActiveTab('factor-library')}
           />
         )}
 
@@ -344,13 +207,6 @@ const QuantitativeSelection: React.FC = () => {
           />
         )}
       </div>
-
-      {/* 策略执行结果模态框 */}
-      <StrategyResultModal
-        visible={showResultModal}
-        results={strategyResults}
-        onClose={() => setShowResultModal(false)}
-      />
     </div>
   );
 };

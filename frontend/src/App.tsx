@@ -23,10 +23,10 @@ const menuItems = [
     path: '/'
   },
   {
-    key: '/quantitative',
+    key: '/factors',
     icon: CurrencyDollarIcon,
-    label: '量化选股',
-    path: '/quantitative'
+    label: '因子库',
+    path: '/factors'
   },
   {
     key: '/watchlist',
@@ -48,7 +48,7 @@ const AppContent: React.FC = () => {
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/': return '大盘监控';
-      case '/quantitative': return '量化选股';
+      case '/factors': return '因子库';
       case '/watchlist': return '自选股管理';
       default: return '量化选股系统';
     }
@@ -90,7 +90,7 @@ const AppContent: React.FC = () => {
           <main className="flex-1 p-6">
             <Routes>
                               <Route path="/" element={<Dashboard />} />
-                <Route path="/quantitative" element={<QuantitativeSelection />} />
+                <Route path="/factors" element={<QuantitativeSelection />} />
                 <Route path="/watchlist" element={<Watchlist />} />
                 <Route path="/strategy" element={<StrategyManagement />} />
             </Routes>
