@@ -34,6 +34,16 @@ api.interceptors.response.use(
 
 // ====== 接口类型定义 ======
 
+// 市场指数相关接口
+export interface MarketIndex {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+}
+
 // 因子相关接口（统一）
 export interface Factor {
   factor_id: string;

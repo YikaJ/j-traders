@@ -11,6 +11,9 @@ import Dashboard from './pages/Dashboard';
 import QuantitativeSelection from './pages/QuantitativeSelection';
 import Watchlist from './pages/Watchlist';
 
+// 通用组件
+import ThemeToggle from './components/common/ThemeToggle';
+
 const menuItems = [
   {
     key: '/',
@@ -64,11 +67,14 @@ const AppContent: React.FC = () => {
               <h1 className="text-xl font-bold">{getPageTitle()}</h1>
             </div>
             <div className="flex-none">
-              <div className="text-sm">
-                <span className="badge badge-success badge-sm mr-2">正常</span>
-                <span className="text-base-content/60">
-                  最后更新: {new Date().toLocaleTimeString()}
-                </span>
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <div className="text-sm">
+                  <span className="badge badge-success badge-sm mr-2">正常</span>
+                  <span className="text-base-content/60">
+                    最后更新: {new Date().toLocaleTimeString()}
+                  </span>
+                </div>
               </div>
             </div>
           </div>

@@ -2,19 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   PlusIcon, 
   TrashIcon, 
-  MagnifyingGlassIcon, 
   ArrowPathIcon,
   EyeIcon
 } from '@heroicons/react/24/outline';
-import { watchlistApi, stockApi, WatchlistStock } from '../services/api';
+import { watchlistApi, stockApi, WatchlistStock, SearchStock } from '../services/api';
 
-interface SearchStock {
-  symbol: string;
-  name: string;
-  industry?: string;
-  area?: string;
-  market?: string;
-}
+// 导入组件
+import StockSearchModal from '../components/watchlist/StockSearchModal';
+import DeleteConfirmModal from '../components/watchlist/DeleteConfirmModal';
+import MessageAlert from '../components/dashboard/MessageAlert';
 
 const Watchlist: React.FC = () => {
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
@@ -139,22 +135,10 @@ const Watchlist: React.FC = () => {
     showMessage('success', '数据刷新成功');
   };
 
-  const getMarketColor = (market: string) => {
-    return market === 'SH' ? 'badge-error' : 'badge-success';
-  };
-
   return (
     <div className="space-y-6">
       {/* 消息提示 */}
-      {message && (
-        <div className={`alert ${
-          message.type === 'success' ? 'alert-success' : 
-          message.type === 'error' ? 'alert-error' : 
-          message.type === 'warning' ? 'alert-warning' : 'alert-info'
-        }`}>
-          <span>{message.text}</span>
-        </div>
-      )}
+      <MessageAlert message={message} />
 
       {/* 自选股列表 */}
       <div className="card bg-base-100 shadow-xl">
@@ -253,150 +237,26 @@ const Watchlist: React.FC = () => {
       </div>
 
       {/* 添加股票弹窗 */}
-      {isAddModalVisible && (
-        <div className="modal modal-open">
-          <div className="modal-box w-11/12 max-w-4xl">
-            <h3 className="font-bold text-lg mb-4">添加股票到自选股</h3>
-            
-            <div className="space-y-4">
-              {/* 搜索框 */}
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">搜索股票</span>
-                </label>
-                <div className="join">
-                  <input 
-                    type="text"
-                    className="input input-bordered join-item flex-1"
-                    placeholder="请输入股票代码或名称"
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        handleSearch(searchKeyword);
-                      }
-                    }}
-                  />
-                  <button 
-                    className={`btn btn-primary join-item ${searchLoading ? 'loading' : ''}`}
-                    onClick={() => handleSearch(searchKeyword)}
-                    disabled={searchLoading}
-                  >
-                    <MagnifyingGlassIcon className="w-4 h-4" />
-                    搜索
-                  </button>
-                </div>
-              </div>
-
-              {/* 搜索结果 */}
-              {searchResults.length > 0 && (
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text">搜索结果</span>
-                  </label>
-                  <div className="overflow-x-auto max-h-80">
-                    <table className="table table-compact">
-                      <thead>
-                        <tr>
-                          <th>代码</th>
-                          <th>名称</th>
-                          <th>行业</th>
-                          <th>地区</th>
-                          <th>市场</th>
-                          <th>操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {searchResults.map((stock) => (
-                          <tr key={stock.symbol}>
-                            <td className="font-mono text-sm">{stock.symbol}</td>
-                            <td className="font-medium">{stock.name}</td>
-                            <td className="text-sm">{stock.industry || '-'}</td>
-                            <td className="text-sm">{stock.area || '-'}</td>
-                            <td>
-                              <div className={`badge badge-sm ${getMarketColor(stock.market || '')}`}>
-                                {stock.market || '-'}
-                              </div>
-                            </td>
-                            <td>
-                              <button 
-                                className="btn btn-ghost btn-xs"
-                                onClick={() => handleAddStock(stock)}
-                              >
-                                添加
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* 备注 */}
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">备注</span>
-                </label>
-                <textarea 
-                  className="textarea textarea-bordered h-20"
-                  placeholder="可选：为这只股票添加备注信息"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div className="modal-action">
-              <button 
-                className="btn" 
-                onClick={() => {
-                  setIsAddModalVisible(false);
-                  setSearchKeyword('');
-                  setNotes('');
-                  setSearchResults([]);
-                }}
-              >
-                取消
-              </button>
-            </div>
-          </div>
-          <div className="modal-backdrop" onClick={() => {
-            setIsAddModalVisible(false);
-            setSearchKeyword('');
-            setNotes('');
-            setSearchResults([]);
-          }}></div>
-        </div>
-      )}
+      <StockSearchModal
+        visible={isAddModalVisible}
+        searchResults={searchResults}
+        searchLoading={searchLoading}
+        searchKeyword={searchKeyword}
+        notes={notes}
+        onClose={() => setIsAddModalVisible(false)}
+        onSearch={handleSearch}
+        onAddStock={handleAddStock}
+        onSetSearchKeyword={setSearchKeyword}
+        onSetNotes={setNotes}
+      />
 
       {/* 删除确认对话框 */}
-      {confirmDelete.visible && confirmDelete.stock && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">确认删除</h3>
-            <p className="py-4">
-              确定要从自选股中移除 <strong>{confirmDelete.stock.name}</strong> 吗？
-            </p>
-            <div className="modal-action">
-              <button 
-                className="btn"
-                onClick={() => setConfirmDelete({ visible: false, stock: null })}
-              >
-                取消
-              </button>
-              <button 
-                className="btn btn-error"
-                onClick={() => handleRemoveStock(confirmDelete.stock!)}
-              >
-                确定移除
-              </button>
-            </div>
-          </div>
-          <div className="modal-backdrop" onClick={() => setConfirmDelete({ visible: false, stock: null })}></div>
-        </div>
-      )}
+      <DeleteConfirmModal
+        visible={confirmDelete.visible}
+        stock={confirmDelete.stock}
+        onClose={() => setConfirmDelete({ visible: false, stock: null })}
+        onConfirm={() => confirmDelete.stock && handleRemoveStock(confirmDelete.stock)}
+      />
     </div>
   );
 };
