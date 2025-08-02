@@ -46,23 +46,17 @@ export interface MarketIndex {
 
 // 因子相关接口（统一）
 export interface Factor {
-  factor_id: string;
+  id: number;
   name: string;
-  display_name: string;
   description: string;
   category: string;
-  formula: string;
-  input_fields: string[];
-  default_parameters: Record<string, any>;
-  parameter_schema?: Record<string, any>;
-  calculation_method: string;
-  is_active: boolean;
-  is_builtin: boolean;
-  version?: string;
-  usage_count?: number;
-  last_used_at?: string;
-  created_at?: string;
-  updated_at?: string;
+  code: string;
+  isActive: boolean;
+  version: string;
+  usageCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FactorParameters {
@@ -675,12 +669,12 @@ export const strategyApi = {
     filters?: any;
     max_results?: number;
   }): Promise<StrategyResult[]> => {
-    return api.post('/strategies/execute', params);
+    return api.post('/strategy-execution/execute', params);
   },
 
   // 获取策略历史
   getStrategyHistory: async () => {
-    return api.get('/strategies/history');
+    return api.get('/strategy-execution/history');
   },
 
   // 策略回测（如果需要的话）
@@ -691,7 +685,7 @@ export const strategyApi = {
     end_date: string;
     initial_capital?: number;
   }) => {
-    return api.post('/strategies/backtest', params);
+    return api.post('/strategy-execution/backtest', params);
   },
 };
 
@@ -741,6 +735,269 @@ export const stockApi = {
     const params = { _t: Date.now() };
     return api.get('/stocks/stats', { params });
   },
+};
+
+// 数据字段配置相关接口
+export interface DataField {
+  field_id: string;
+  field_name: string;
+  display_name: string;
+  description: string;
+  category: DataFieldCategory;
+  field_type: DataFieldType;
+  unit?: string;
+  is_required: boolean;
+  is_common: boolean;
+  tushare_field?: string;
+  example_value?: string;
+  validation_rules?: Record<string, any>;
+}
+
+export interface DataFieldConfig {
+  category: DataFieldCategory;
+  fields: DataField[];
+  description: string;
+}
+
+export enum DataFieldCategory {
+  PRICE = "price",
+  VOLUME = "volume", 
+  TECHNICAL = "technical",
+  FUNDAMENTAL = "fundamental",
+  DERIVED = "derived"
+}
+
+export enum DataFieldType {
+  NUMERIC = "numeric",
+  STRING = "string",
+  DATE = "date",
+  BOOLEAN = "boolean"
+}
+
+export interface FactorInputFieldsResponse {
+  categories: DataFieldConfig[];
+  total_fields: number;
+}
+
+export interface FieldValidationResult {
+  status: "valid" | "warning" | "error";
+  message: string;
+}
+
+// 数据字段配置API
+export const dataFieldApi = {
+  // 获取因子输入字段配置
+  getFactorInputFields: async (
+    categories?: DataFieldCategory[],
+    includeCommonOnly: boolean = true
+  ): Promise<FactorInputFieldsResponse> => {
+    const params: Record<string, any> = {
+      include_common_only: includeCommonOnly
+    };
+    
+    if (categories && categories.length > 0) {
+      // FastAPI需要重复参数名来处理数组
+      categories.forEach(category => {
+        if (!params.categories) params.categories = [];
+        params.categories.push(category);
+      });
+    }
+    
+    return api.get('/data/fields', { params });
+  },
+
+  // 获取常用字段
+  getCommonFields: async (): Promise<DataField[]> => {
+    return api.get('/data/fields/common');
+  },
+
+  // 根据字段ID获取字段信息
+  getFieldById: async (fieldId: string): Promise<DataField> => {
+    return api.get(`/data/fields/${fieldId}`);
+  },
+
+  // 验证字段组合
+  validateFieldCombination: async (fieldIds: string[]): Promise<FieldValidationResult> => {
+    return api.post('/data/fields/validate', fieldIds);
+  }
+};
+
+// 策略管理相关接口
+export interface StrategyFactor {
+  factor_id: string;
+  factor_name: string;
+  weight: number;
+  is_enabled: boolean;
+}
+
+export interface StrategyFilter {
+  min_market_cap?: number;
+  max_market_cap?: number;
+  min_price?: number;
+  max_price?: number;
+  min_turnover?: number;
+  max_turnover?: number;
+  exclude_st: boolean;
+  exclude_new_stock: boolean;
+  exclude_suspend: boolean;
+  industries?: string[];
+  exclude_industries?: string[];
+}
+
+export interface StrategyConfig {
+  max_results: number;
+  rebalance_frequency: string;
+  ranking_method: string;
+}
+
+export interface Strategy {
+  strategy_id: string;
+  name: string;
+  description?: string;
+  factors: StrategyFactor[];
+  filters?: StrategyFilter;
+  config?: StrategyConfig;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  execution_count: number;
+  last_executed_at?: string;
+  avg_execution_time?: number;
+  last_result_count?: number;
+}
+
+export interface StrategyCreate {
+  name: string;
+  description?: string;
+  factors: StrategyFactor[];
+  filters?: StrategyFilter;
+  config?: StrategyConfig;
+}
+
+export interface StrategyUpdate {
+  name?: string;
+  description?: string;
+  factors?: StrategyFactor[];
+  filters?: StrategyFilter;
+  config?: StrategyConfig;
+  is_active?: boolean;
+}
+
+export interface StrategyListResponse {
+  strategies: Strategy[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface StrategyExecutionRequest {
+  execution_date?: string;
+  dry_run?: boolean;
+  save_result?: boolean;
+}
+
+export interface StrategyExecutionResult {
+  execution_id: string;
+  strategy_id: string;
+  execution_date: string;
+  execution_time: number;
+  stock_count: number;
+  is_dry_run: boolean;
+  status: string;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface SelectedStock {
+  stock_code: string;
+  stock_name: string;
+  composite_score: number;
+  factor_scores: Record<string, number>;
+  rank: number;
+  market_cap?: number;
+  price?: number;
+  industry?: string;
+}
+
+export interface StrategyExecutionDetail extends StrategyExecutionResult {
+  selected_stocks: SelectedStock[];
+  factor_performance: Record<string, any>;
+  execution_log: string[];
+}
+
+export interface AvailableFactor {
+  factor_id: string;
+  factor_name: string;
+  display_name: string;
+  description?: string;
+  category: string;
+  is_active: boolean;
+}
+
+// 策略管理API
+export const strategyManagementApi = {
+  // 创建策略
+  createStrategy: async (strategyData: StrategyCreate, createdBy?: string): Promise<Strategy> => {
+    const params = createdBy ? { created_by: createdBy } : {};
+    return api.post('/strategy-management/', strategyData, { params });
+  },
+
+  // 获取策略列表
+  getStrategies: async (params?: {
+    is_active?: boolean;
+    created_by?: string;
+    keyword?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<StrategyListResponse> => {
+    return api.get('/strategy-management/', { params });
+  },
+
+  // 获取单个策略
+  getStrategy: async (strategyId: string): Promise<Strategy> => {
+    return api.get(`/strategy-management/${strategyId}`);
+  },
+
+  // 更新策略
+  updateStrategy: async (strategyId: string, strategyData: StrategyUpdate): Promise<Strategy> => {
+    return api.put(`/strategy-management/${strategyId}`, strategyData);
+  },
+
+  // 删除策略
+  deleteStrategy: async (strategyId: string): Promise<{ message: string }> => {
+    return api.delete(`/strategy-management/${strategyId}`);
+  },
+
+  // 执行策略
+  executeStrategy: async (strategyId: string, request: StrategyExecutionRequest): Promise<StrategyExecutionResult> => {
+    return api.post(`/strategy-management/${strategyId}/execute`, request);
+  },
+
+  // 获取执行历史
+  getExecutionHistory: async (strategyId: string, limit?: number): Promise<StrategyExecutionResult[]> => {
+    const params = limit ? { limit } : {};
+    return api.get(`/strategy-management/${strategyId}/executions`, { params });
+  },
+
+  // 获取执行详情
+  getExecutionDetail: async (executionId: string): Promise<StrategyExecutionDetail> => {
+    return api.get(`/strategy-management/executions/${executionId}`);
+  },
+
+  // 获取可用因子
+  getAvailableFactors: async (strategyId: string): Promise<{ factors: AvailableFactor[] }> => {
+    return api.get(`/strategy-management/${strategyId}/available-factors`);
+  },
+
+  // 验证策略
+  validateStrategy: async (strategyId: string): Promise<{
+    is_valid: boolean;
+    errors: string[];
+    warnings: string[];
+  }> => {
+    return api.post(`/strategy-management/${strategyId}/validate`);
+  }
 };
 
 // 健康检查

@@ -10,6 +10,7 @@ import {
 import Dashboard from './pages/Dashboard';
 import QuantitativeSelection from './pages/QuantitativeSelection';
 import Watchlist from './pages/Watchlist';
+import StrategyManagement from './pages/StrategyManagement';
 
 // 通用组件
 import ThemeToggle from './components/common/ThemeToggle';
@@ -22,10 +23,10 @@ const menuItems = [
     path: '/'
   },
   {
-    key: '/quantitative',
+    key: '/factors',
     icon: CurrencyDollarIcon,
-    label: '量化选股',
-    path: '/quantitative'
+    label: '因子库',
+    path: '/factors'
   },
   {
     key: '/watchlist',
@@ -33,6 +34,12 @@ const menuItems = [
     label: '自选股',
     path: '/watchlist'
   },
+  {
+    key: '/strategy',
+    icon: CurrencyDollarIcon,
+    label: '策略管理',
+    path: '/strategy'
+  }
 ];
 
 const AppContent: React.FC = () => {
@@ -41,7 +48,7 @@ const AppContent: React.FC = () => {
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/': return '大盘监控';
-      case '/quantitative': return '量化选股';
+      case '/factors': return '因子库';
       case '/watchlist': return '自选股管理';
       default: return '量化选股系统';
     }
@@ -82,9 +89,10 @@ const AppContent: React.FC = () => {
           {/* Page content */}
           <main className="flex-1 p-6">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/quantitative" element={<QuantitativeSelection />} />
-              <Route path="/watchlist" element={<Watchlist />} />
+                              <Route path="/" element={<Dashboard />} />
+                <Route path="/factors" element={<QuantitativeSelection />} />
+                <Route path="/watchlist" element={<Watchlist />} />
+                <Route path="/strategy" element={<StrategyManagement />} />
             </Routes>
           </main>
         </div>

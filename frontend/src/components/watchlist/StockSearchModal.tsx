@@ -40,7 +40,7 @@ const StockSearchModal: React.FC<StockSearchModalProps> = ({
   };
 
   return (
-    <div className="modal modal-open">
+    <dialog className="modal modal-open">
       <div className="modal-box w-11/12 max-w-4xl">
         <h3 className="font-bold text-lg mb-4">添加股票到自选股</h3>
         
@@ -143,8 +143,10 @@ const StockSearchModal: React.FC<StockSearchModalProps> = ({
           </button>
         </div>
       </div>
-      <div className="modal-backdrop" onClick={handleClose}></div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 

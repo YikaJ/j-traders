@@ -7,7 +7,9 @@ import FactorGrid from './FactorGrid';
 import FactorDetailModal from './FactorDetailModal';
 import FactorFormulaModal from './FactorFormulaModal';
 import FactorEditModal from './FactorEditModal';
+import FactorEditModalImproved from './FactorEditModalImproved';
 import FactorCreateModal from './FactorCreateModal';
+import FactorCreateModalImproved from './FactorCreateModalImproved';
 import FactorHistoryModal from './FactorHistoryModal';
 
 interface FactorLibraryProps {
@@ -222,7 +224,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
             isSelected={isFactorSelected(selectedFactor.factor_id)}
           />
 
-          <FactorEditModal
+          <FactorEditModalImproved
             factor={selectedFactor}
             isOpen={showEditModal}
             onClose={() => setShowEditModal(false)}
@@ -237,7 +239,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
         </>
       )}
 
-      <FactorCreateModal
+      <FactorCreateModalImproved
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreated={handleFactorUpdate}

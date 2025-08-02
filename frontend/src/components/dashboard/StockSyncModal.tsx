@@ -19,7 +19,7 @@ const StockSyncModal: React.FC<StockSyncModalProps> = ({
   if (!visible) return null;
 
   return (
-    <div className="modal modal-open">
+    <dialog className="modal modal-open">
       <div className="modal-box">
         <h3 className="font-bold text-lg mb-4">股票数据同步</h3>
         
@@ -75,8 +75,10 @@ const StockSyncModal: React.FC<StockSyncModalProps> = ({
           </button>
         </div>
       </div>
-      <div className="modal-backdrop" onClick={() => !syncing && onClose()}></div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 
