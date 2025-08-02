@@ -17,8 +17,10 @@ from app.schemas.strategy import (
     StrategyExecutionRequest, StrategyExecutionResult,
     SelectedStock, StrategyExecutionDetail
 )
-from app.services.factor_service import factor_service
+from app.schemas.strategy_execution import ExecutionStatus
+from app.services.unified_factor_service import unified_factor_service
 from app.services.tushare_service import tushare_service
+from app.services.strategy_execution_engine import strategy_execution_engine
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ class StrategyManagementService:
     """策略管理服务"""
     
     def __init__(self):
-        self.factor_service = factor_service
+        self.factor_service = unified_factor_service
         self.tushare_service = tushare_service
     
     async def create_strategy(self, db: Session, strategy_data: StrategyCreate, created_by: str = None) -> StrategyResponse:
@@ -174,74 +176,26 @@ class StrategyManagementService:
             if not strategy.is_active:
                 raise ValueError(f"策略已禁用: {strategy_id}")
             
-            execution_date = request.execution_date or datetime.now().strftime("%Y-%m-%d")
-            start_time = datetime.now()
+            # 使用新的执行引擎
+            result = await strategy_execution_engine.execute_strategy(db, strategy, request)
             
-            # 创建执行记录
-            execution = StrategyExecution(
-                strategy_id=strategy.id,
-                execution_date=execution_date,
-                is_dry_run=request.dry_run,
-                is_saved=request.save_result,
-                status="running"
-            )
-            
-            try:
-                # 执行策略选股
-                selected_stocks = await self._execute_stock_selection(strategy, execution_date)
+            # 如果需要保存结果，更新策略统计
+            if request.save_result and result.status == ExecutionStatus.COMPLETED:
+                strategy.execution_count = (strategy.execution_count or 0) + 1
+                strategy.last_executed_at = datetime.now()
+                strategy.last_result_count = result.final_stock_count or 0
                 
-                # 计算执行时间
-                execution_time = (datetime.now() - start_time).total_seconds()
-                
-                # 更新执行记录
-                execution.execution_time = execution_time
-                execution.stock_count = len(selected_stocks)
-                execution.status = "success"
-                execution.selected_stocks = [stock.dict() for stock in selected_stocks]
-                
-                # 保存执行记录
-                if request.save_result:
-                    db.add(execution)
-                    
-                    # 更新策略统计
-                    strategy.execution_count += 1
-                    strategy.last_executed_at = datetime.now()
-                    strategy.last_result_count = len(selected_stocks)
-                    
-                    # 更新平均执行时间
+                # 更新平均执行时间
+                if result.total_time:
                     if strategy.avg_execution_time:
-                        strategy.avg_execution_time = (strategy.avg_execution_time * (strategy.execution_count - 1) + execution_time) / strategy.execution_count
+                        strategy.avg_execution_time = (strategy.avg_execution_time * (strategy.execution_count - 1) + result.total_time) / strategy.execution_count
                     else:
-                        strategy.avg_execution_time = execution_time
-                    
-                    db.commit()
-                    db.refresh(execution)
+                        strategy.avg_execution_time = result.total_time
                 
-                logger.info(f"策略执行成功: {strategy_id}, 选中股票: {len(selected_stocks)}")
-                
-                return StrategyExecutionResult(
-                    execution_id=execution.execution_id,
-                    strategy_id=strategy_id,
-                    execution_date=execution_date,
-                    execution_time=execution_time,
-                    stock_count=len(selected_stocks),
-                    is_dry_run=request.dry_run,
-                    status="success",
-                    created_at=execution.created_at or datetime.now()
-                )
-                
-            except Exception as e:
-                # 执行失败
-                execution_time = (datetime.now() - start_time).total_seconds()
-                execution.execution_time = execution_time
-                execution.status = "failed"
-                execution.error_message = str(e)
-                
-                if request.save_result:
-                    db.add(execution)
-                    db.commit()
-                
-                raise
+                db.commit()
+            
+            logger.info(f"策略执行完成: {strategy_id}, 状态: {result.status}")
+            return result
                 
         except Exception as e:
             logger.error(f"执行策略失败: {e}")
@@ -302,126 +256,24 @@ class StrategyManagementService:
     async def _validate_factors(self, db: Session, factors: List) -> None:
         """验证因子存在性"""
         factor_ids = [factor.factor_id for factor in factors]
+        
+        # 尝试通过factor_id查找
         existing_factors = db.query(Factor).filter(Factor.factor_id.in_(factor_ids)).all()
         existing_ids = {factor.factor_id for factor in existing_factors}
+        
+        # 如果通过factor_id没找到，尝试通过数字ID查找
+        if not existing_factors:
+            try:
+                numeric_ids = [int(fid) for fid in factor_ids if fid.isdigit()]
+                if numeric_ids:
+                    existing_factors = db.query(Factor).filter(Factor.id.in_(numeric_ids)).all()
+                    existing_ids = {str(factor.id) for factor in existing_factors}
+            except ValueError:
+                pass
         
         missing_ids = set(factor_ids) - existing_ids
         if missing_ids:
             raise ValueError(f"因子不存在: {', '.join(missing_ids)}")
-    
-    async def _execute_stock_selection(self, strategy: Strategy, execution_date: str) -> List[SelectedStock]:
-        """执行股票选择算法"""
-        try:
-            # 获取股票池
-            stock_pool = await self._get_stock_pool(strategy, execution_date)
-            
-            # 计算因子得分
-            factor_scores = await self._calculate_factor_scores(strategy, stock_pool, execution_date)
-            
-            # 计算综合得分
-            composite_scores = self._calculate_composite_scores(strategy, factor_scores)
-            
-            # 应用筛选条件
-            filtered_stocks = self._apply_filters(strategy, composite_scores)
-            
-            # 排序并选择top股票
-            max_results = strategy.config.get('max_results', 50) if strategy.config else 50
-            selected_stocks = sorted(filtered_stocks, key=lambda x: x.composite_score, reverse=True)[:max_results]
-            
-            # 添加排名
-            for i, stock in enumerate(selected_stocks):
-                stock.rank = i + 1
-            
-            return selected_stocks
-            
-        except Exception as e:
-            logger.error(f"股票选择执行失败: {e}")
-            raise
-    
-    async def _get_stock_pool(self, strategy: Strategy, execution_date: str) -> List[Dict]:
-        """获取股票池"""
-        # 这里应该从数据库或Tushare获取股票数据
-        # 现在返回模拟数据
-        return [
-            {"stock_code": "000001.SZ", "stock_name": "平安银行", "market_cap": 3000000, "price": 15.5, "industry": "银行"},
-            {"stock_code": "000002.SZ", "stock_name": "万科A", "market_cap": 2800000, "price": 25.8, "industry": "房地产"},
-            {"stock_code": "600036.SH", "stock_name": "招商银行", "market_cap": 15000000, "price": 45.2, "industry": "银行"},
-            {"stock_code": "000858.SZ", "stock_name": "五粮液", "market_cap": 8500000, "price": 220.5, "industry": "食品饮料"},
-        ]
-    
-    async def _calculate_factor_scores(self, strategy: Strategy, stock_pool: List[Dict], execution_date: str) -> Dict[str, Dict[str, float]]:
-        """计算因子得分"""
-        factor_scores = {}
-        
-        for factor_config in strategy.factors:
-            factor_id = factor_config['factor_id']
-            if not factor_config.get('is_enabled', True):
-                continue
-            
-            # 这里应该调用实际的因子计算服务
-            # 现在返回模拟得分
-            scores = {}
-            for stock in stock_pool:
-                import random
-                scores[stock['stock_code']] = random.uniform(-1, 1)
-            
-            factor_scores[factor_id] = scores
-        
-        return factor_scores
-    
-    def _calculate_composite_scores(self, strategy: Strategy, factor_scores: Dict[str, Dict[str, float]]) -> List[SelectedStock]:
-        """计算综合得分"""
-        composite_scores = []
-        
-        # 获取所有股票代码
-        all_stocks = set()
-        for scores in factor_scores.values():
-            all_stocks.update(scores.keys())
-        
-        for stock_code in all_stocks:
-            stock_factor_scores = {}
-            composite_score = 0.0
-            
-            for factor_config in strategy.factors:
-                factor_id = factor_config['factor_id']
-                if not factor_config.get('is_enabled', True):
-                    continue
-                
-                weight = factor_config['weight']
-                score = factor_scores.get(factor_id, {}).get(stock_code, 0)
-                
-                stock_factor_scores[factor_id] = score
-                composite_score += weight * score
-            
-            # 获取股票基本信息（应该从数据库获取）
-            stock_name = stock_code.split('.')[0]  # 简化处理
-            
-            selected_stock = SelectedStock(
-                stock_code=stock_code,
-                stock_name=stock_name,
-                composite_score=composite_score,
-                factor_scores=stock_factor_scores,
-                rank=0  # 稍后设置
-            )
-            
-            composite_scores.append(selected_stock)
-        
-        return composite_scores
-    
-    def _apply_filters(self, strategy: Strategy, stocks: List[SelectedStock]) -> List[SelectedStock]:
-        """应用筛选条件"""
-        if not strategy.filters:
-            return stocks
-        
-        filtered_stocks = []
-        filters = strategy.filters
-        
-        for stock in stocks:
-            # 这里应该应用实际的筛选逻辑
-            # 现在简单地返回所有股票
-            filtered_stocks.append(stock)
-        
-        return filtered_stocks
     
     def _strategy_to_response(self, strategy: Strategy) -> StrategyResponse:
         """转换策略模型为响应模型"""

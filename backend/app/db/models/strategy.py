@@ -129,3 +129,35 @@ class StrategyTemplate(Base):
     
     def __repr__(self):
         return f"<StrategyTemplate(id={self.id}, template_id='{self.template_id}', name='{self.name}')>"
+
+
+class SelectionResult(Base):
+    """选股结果"""
+    __tablename__ = "selection_results"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    execution_id = Column(Integer, ForeignKey("strategy_executions.id"), nullable=False, comment="执行ID")
+    
+    # 股票信息
+    symbol = Column(String(20), nullable=False, comment="股票代码")
+    name = Column(String(100), comment="股票名称")
+    
+    # 评分信息
+    total_score = Column(Float, comment="总评分")
+    rank = Column(Integer, comment="排名")
+    factor_scores = Column(JSON, comment="各因子得分")
+    
+    # 股票属性
+    price = Column(Float, comment="当前价格")
+    market_cap = Column(Float, comment="市值")
+    pe_ratio = Column(Float, comment="市盈率")
+    pb_ratio = Column(Float, comment="市净率")
+    
+    # 时间字段
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    
+    # 关联关系
+    execution = relationship("StrategyExecution", backref="results")
+    
+    def __repr__(self):
+        return f"<SelectionResult(id={self.id}, symbol='{self.symbol}', rank={self.rank})>"

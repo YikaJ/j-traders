@@ -46,23 +46,17 @@ export interface MarketIndex {
 
 // 因子相关接口（统一）
 export interface Factor {
-  factor_id: string;
+  id: number;
   name: string;
-  display_name: string;
   description: string;
   category: string;
-  formula: string;
-  input_fields: string[];
-  default_parameters: Record<string, any>;
-  parameter_schema?: Record<string, any>;
-  calculation_method: string;
-  is_active: boolean;
-  is_builtin: boolean;
-  version?: string;
-  usage_count?: number;
-  last_used_at?: string;
-  created_at?: string;
-  updated_at?: string;
+  code: string;
+  isActive: boolean;
+  version: string;
+  usageCount: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FactorParameters {
@@ -675,12 +669,12 @@ export const strategyApi = {
     filters?: any;
     max_results?: number;
   }): Promise<StrategyResult[]> => {
-    return api.post('/strategies/execute', params);
+    return api.post('/strategy-execution/execute', params);
   },
 
   // 获取策略历史
   getStrategyHistory: async () => {
-    return api.get('/strategies/history');
+    return api.get('/strategy-execution/history');
   },
 
   // 策略回测（如果需要的话）
@@ -691,7 +685,7 @@ export const strategyApi = {
     end_date: string;
     initial_capital?: number;
   }) => {
-    return api.post('/strategies/backtest', params);
+    return api.post('/strategy-execution/backtest', params);
   },
 };
 

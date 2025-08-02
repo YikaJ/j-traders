@@ -213,9 +213,9 @@ async def get_available_factors(
     """
     try:
         # 这里可以集成因子服务，获取所有可用的因子
-        from app.services.factor_service import factor_service
+        from app.services.unified_factor_service import unified_factor_service
         
-        factors = await factor_service.get_all_factors(db)
+        factors = unified_factor_service.get_all_factors(db)
         
         # 转换为简化格式，方便前端使用
         available_factors = []

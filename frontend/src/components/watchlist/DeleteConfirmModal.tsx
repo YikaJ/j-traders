@@ -17,7 +17,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   if (!visible || !stock) return null;
 
   return (
-    <div className="modal modal-open">
+    <dialog className="modal modal-open">
       <div className="modal-box">
         <h3 className="font-bold text-lg">确认删除</h3>
         <p className="py-4">
@@ -38,8 +38,10 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
           </button>
         </div>
       </div>
-      <div className="modal-backdrop" onClick={onClose}></div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 

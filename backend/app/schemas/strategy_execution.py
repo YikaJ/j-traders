@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
+from app.schemas.strategy import SelectedStock
 
 
 class StockScope(str, Enum):
@@ -201,8 +202,6 @@ class StrategyExecutionResult(BaseModel):
 
 class StrategyExecutionDetailResult(StrategyExecutionResult):
     """详细的策略执行结果"""
-    from app.schemas.strategy import SelectedStock
-    
     selected_stocks: List[SelectedStock] = Field(default_factory=list, description="选中的股票列表")
     factor_performance: Dict[str, Any] = Field(default_factory=dict, description="因子表现统计")
 

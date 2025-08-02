@@ -243,7 +243,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal modal-open backdrop-blur-sm">
+    <dialog className="modal modal-open">
       <div className="modal-box max-w-5xl max-h-[90vh] bg-base-100 border border-base-300 shadow-2xl">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-base-300">
@@ -694,7 +694,10 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
           </div>
         )}
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 

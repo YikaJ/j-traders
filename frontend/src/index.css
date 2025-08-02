@@ -33,36 +33,3 @@ div.js-plotly-plot div.plotly div.modebar a {
   height: 300px;
   overflow: hidden;
 }
-
-/* 深色主题下的表格样式优化 */
-[data-theme="dark"] .table {
-  background-color: hsl(var(--b2));
-}
-
-[data-theme="dark"] .table thead th {
-  background-color: hsl(var(--b3));
-  color: hsl(var(--bc));
-}
-
-[data-theme="dark"] .table tbody tr:hover {
-  background-color: hsl(var(--b3));
-}
-
-/* 深色主题下的模态框样式优化 */
-[data-theme="dark"] .modal-box {
-  background-color: hsl(var(--b1));
-  color: hsl(var(--bc));
-}
-
-/* 深色主题下的输入框样式优化 */
-[data-theme="dark"] .input,
-[data-theme="dark"] .textarea {
-  background-color: hsl(var(--b2));
-  border-color: hsl(var(--b3));
-  color: hsl(var(--bc));
-}
-
-[data-theme="dark"] .input:focus,
-[data-theme="dark"] .textarea:focus {
-  border-color: hsl(var(--p));
-}

@@ -13,7 +13,6 @@ from app.schemas.strategy_execution import (
     StrategyExecutionRequest, StrategyExecutionResult, StrategyExecutionDetailResult,
     StockFilter, AvailableScope, ExecutionProgress, CancelExecutionRequest
 )
-from app.schemas.strategy import Strategy
 from app.services.strategy_execution_engine import strategy_execution_engine
 from app.services.strategy_management_service import strategy_management_service
 

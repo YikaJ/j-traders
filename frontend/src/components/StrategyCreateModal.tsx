@@ -54,7 +54,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
     try {
       setLoadingFactors(true);
       const factors = await factorApi.getFactors();
-      setAvailableFactors(factors.filter(f => f.is_active));
+      setAvailableFactors(factors.filter(f => f.isActive));
     } catch (error) {
       console.error('加载因子失败:', error);
     } finally {
@@ -143,8 +143,8 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
   // 添加因子
   const handleAddFactor = (factor: Factor) => {
     const newStrategyFactor: StrategyFactor = {
-      factor_id: factor.factor_id,
-      factor_name: factor.display_name || factor.name,
+      factor_id: factor.id.toString(),
+      factor_name: factor.name,
       weight: 0,
       is_enabled: true
     };
@@ -230,7 +230,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
   // 获取未选择的因子
   const getUnselectedFactors = () => {
     const selectedIds = new Set(strategyForm.factors.map(f => f.factor_id));
-    return availableFactors.filter(f => !selectedIds.has(f.factor_id));
+    return availableFactors.filter(f => !selectedIds.has(f.id.toString()));
   };
 
   // 步骤指示器
@@ -264,7 +264,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="modal modal-open backdrop-blur-sm">
+    <dialog className="modal">
       <div className="modal-box max-w-4xl max-h-[90vh] bg-base-100 border border-base-300 shadow-2xl">
         {/* 成功动画覆盖层 */}
         {showSuccessAnimation && (
@@ -445,14 +445,14 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto">
                     {getUnselectedFactors().map((factor) => (
                       <div
-                        key={factor.factor_id}
+                        key={factor.id}
                         className="flex items-center gap-3 p-3 bg-base-100 rounded border hover:bg-base-200/50 cursor-pointer"
                         onClick={() => handleAddFactor(factor)}
                       >
                         <PlusIcon className="w-5 h-5 text-primary" />
                         <div className="flex-1">
-                          <div className="font-medium text-base-content">{factor.display_name || factor.name}</div>
-                          <div className="text-sm text-base-content/70">{factor.factor_id}</div>
+                          <div className="font-medium text-base-content">{factor.name}</div>
+                          <div className="text-sm text-base-content/70">{factor.id}</div>
                           <div className="text-xs text-base-content/60">{factor.description}</div>
                         </div>
                       </div>
@@ -613,7 +613,10 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 

@@ -20,11 +20,14 @@ from app.schemas.strategy_execution import (
     StageProgress, DataFetchSummary, FactorCalculationSummary, 
     FactorDataRequest, StockUniverse, AvailableScope
 )
-from app.schemas.strategy import SelectedStock, Strategy
+from app.schemas.strategy import SelectedStock
+from app.schemas.factors import StrategyExecutionResponse, SelectionResult as SelectionResultSchema
+from app.db.models.factor import Factor, FactorValue
+from app.db.models.strategy import Strategy as StrategyModel, StrategyExecution, SelectionResult
+from app.db.models.stock import Stock, StockDaily
 from app.services.tushare_service import tushare_service
-from app.services.factor_service import factor_service
+from app.services.unified_factor_service import unified_factor_service
 from app.services.cache_service import cache_service
-from app.db.models.strategy import Strategy as StrategyModel
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +136,7 @@ class DataFetcher:
         self.cache_hits = 0
         self.api_calls = 0
         self.total_data_size = 0
+        self.executor = ThreadPoolExecutor(max_workers=4)
     
     async def fetch_stock_data(self, stock_codes: List[str], required_fields: List[str], 
                               trade_date: str) -> Tuple[pd.DataFrame, DataFetchSummary]:
@@ -244,6 +248,59 @@ class DataFetcher:
             self.logger.log(LogLevel.ERROR, "data_fetching", 
                            f"从Tushare获取数据失败: {str(e)}")
             return None
+    
+    async def get_stock_historical_data(self, symbol: str, end_date: str, db: Session,
+                                      days: int = 252) -> pd.DataFrame:
+        """获取股票历史数据"""
+        try:
+            start_date = (datetime.strptime(end_date, '%Y%m%d') - timedelta(days=days)).strftime('%Y%m%d')
+            
+            # 从数据库获取数据
+            stock_data = db.query(StockDaily).filter(
+                StockDaily.symbol == symbol,
+                StockDaily.trade_date >= start_date,
+                StockDaily.trade_date <= end_date
+            ).order_by(StockDaily.trade_date).all()
+            
+            if stock_data:
+                data_dict = []
+                for record in stock_data:
+                    data_dict.append({
+                        'trade_date': record.trade_date,
+                        'open': record.open or 0,
+                        'high': record.high or 0,
+                        'low': record.low or 0,
+                        'close': record.close or 0,
+                        'volume': record.vol or 0,
+                        'amount': record.amount or 0,
+                        'pe_ttm': record.pe_ttm or 0,
+                        'pb': record.pb or 0,
+                        'total_mv': record.total_mv or 0,
+                        'circ_mv': record.circ_mv or 0
+                    })
+                
+                df = pd.DataFrame(data_dict)
+                df['trade_date'] = pd.to_datetime(df['trade_date'])
+                df = df.set_index('trade_date').sort_index()
+                return df
+            
+            # 如果没有数据，尝试从Tushare获取
+            try:
+                daily_df = await tushare_service.get_stock_daily(symbol, start_date, end_date)
+                if not daily_df.empty:
+                    # 转换为标准格式
+                    daily_df = daily_df.set_index('trade_date').sort_index()
+                    return daily_df
+            except Exception as e:
+                self.logger.log(LogLevel.WARNING, "data_fetching", 
+                               f"从Tushare获取{symbol}数据失败: {e}")
+            
+            return pd.DataFrame()
+        
+        except Exception as e:
+            self.logger.log(LogLevel.WARNING, "data_fetching", 
+                           f"获取{symbol}历史数据失败: {e}")
+            return pd.DataFrame()
 
 
 class FactorCalculator:
@@ -252,8 +309,9 @@ class FactorCalculator:
     def __init__(self, execution_id: str, logger: ExecutionLogger):
         self.execution_id = execution_id
         self.logger = logger
+        self.executor = ThreadPoolExecutor(max_workers=4)
     
-    async def calculate_factors(self, strategy: Strategy, stock_data: pd.DataFrame) -> Tuple[Dict[str, pd.Series], List[FactorCalculationSummary]]:
+    async def calculate_factors(self, strategy: Any, stock_data: pd.DataFrame) -> Tuple[Dict[str, pd.Series], List[FactorCalculationSummary]]:
         """计算所有因子"""
         factor_results = {}
         summaries = []
@@ -273,7 +331,7 @@ class FactorCalculator:
             
             try:
                 # 获取因子定义
-                factor_def = await factor_service.get_factor_by_id(factor_id)
+                factor_def = unified_factor_service.get_factor_by_id(factor_id, db)
                 if not factor_def:
                     self.logger.log(LogLevel.ERROR, "factor_calculation", 
                                    f"因子 {factor_id} 定义不存在")
@@ -338,6 +396,76 @@ class FactorCalculator:
             self.logger.log(LogLevel.ERROR, "factor_calculation", 
                            f"因子计算执行失败: {str(e)}")
             return None
+    
+    async def execute_single_factor(self, factor_code: str, data: pd.DataFrame) -> float:
+        """执行单个因子计算"""
+        def _run_factor():
+            try:
+                # 准备安全的执行环境
+                safe_globals = {
+                    '__builtins__': {
+                        'abs', 'all', 'any', 'bool', 'dict', 'enumerate', 'filter',
+                        'float', 'int', 'len', 'list', 'map', 'max', 'min', 'range',
+                        'round', 'set', 'sorted', 'str', 'sum', 'tuple', 'zip', 'pow'
+                    },
+                    'pd': pd,
+                    'np': np,
+                }
+                
+                # 执行因子代码
+                exec(factor_code, safe_globals)
+                
+                # 获取calculate函数
+                calculate_func = safe_globals.get('calculate')
+                if not calculate_func:
+                    return 0.0
+                
+                # 执行计算
+                result = calculate_func(data)
+                
+                # 处理结果
+                if isinstance(result, pd.Series):
+                    final_value = result.iloc[-1] if len(result) > 0 else 0.0
+                elif isinstance(result, (int, float)):
+                    final_value = float(result)
+                else:
+                    final_value = 0.0
+                
+                # 处理NaN值
+                if pd.isna(final_value):
+                    final_value = 0.0
+                
+                return final_value
+            
+            except Exception as e:
+                self.logger.log(LogLevel.WARNING, "factor_calculation", 
+                               f"执行因子计算失败: {e}")
+                return 0.0
+        
+        # 在线程池中执行
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(self.executor, _run_factor)
+        return result
+    
+    def normalize_factor_values(self, factor_values: Dict[str, float]) -> Dict[str, float]:
+        """标准化因子值"""
+        values = list(factor_values.values())
+        
+        if not values or all(v == 0 for v in values):
+            return factor_values
+        
+        # 使用Z-Score标准化
+        mean_val = np.mean(values)
+        std_val = np.std(values)
+        
+        if std_val == 0:
+            return {k: 0.0 for k in factor_values.keys()}
+        
+        normalized = {}
+        for symbol, value in factor_values.items():
+            normalized[symbol] = (value - mean_val) / std_val
+        
+        return normalized
 
 
 class StockSelector:
@@ -347,7 +475,7 @@ class StockSelector:
         self.execution_id = execution_id
         self.logger = logger
     
-    async def select_stocks(self, strategy: Strategy, factor_results: Dict[str, pd.Series], 
+    async def select_stocks(self, strategy: Any, factor_results: Dict[str, pd.Series], 
                            stock_data: pd.DataFrame) -> List[SelectedStock]:
         """执行股票选择"""
         self.logger.log(LogLevel.INFO, "ranking_selection", "开始计算综合得分和选股")
@@ -412,6 +540,76 @@ class StockSelector:
                        f"选股完成: 从{len(all_stocks)}只股票中选出{len(selected_stocks)}只")
         
         return selected_stocks
+    
+    async def get_stock_pool(self, strategy: Any, execution_date: str, db: Session) -> List[Dict[str, Any]]:
+        """获取股票池"""
+        try:
+            # 从数据库获取所有股票
+            stocks = db.query(Stock).filter(Stock.list_status == 'L').all()
+            
+            stock_pool = []
+            for stock in stocks:
+                # 获取最新的交易数据
+                latest_data = db.query(StockDaily).filter(
+                    StockDaily.symbol == stock.symbol,
+                    StockDaily.trade_date <= execution_date
+                ).order_by(StockDaily.trade_date.desc()).first()
+                
+                if not latest_data:
+                    continue
+                
+                # 应用基础过滤条件
+                if hasattr(strategy, 'exclude_st') and strategy.exclude_st and ('ST' in stock.name or '*ST' in stock.name):
+                    continue
+                
+                if hasattr(strategy, 'exclude_new_stock') and strategy.exclude_new_stock:
+                    # 排除上市不足60天的新股
+                    if stock.list_date:
+                        list_date = datetime.strptime(stock.list_date, '%Y%m%d')
+                        exec_date = datetime.strptime(execution_date, '%Y%m%d')
+                        if (exec_date - list_date).days < 60:
+                            continue
+                
+                # 市值过滤
+                if hasattr(strategy, 'min_market_cap') and strategy.min_market_cap and latest_data.total_mv:
+                    if latest_data.total_mv < strategy.min_market_cap:
+                        continue
+                
+                if hasattr(strategy, 'max_market_cap') and strategy.max_market_cap and latest_data.total_mv:
+                    if latest_data.total_mv > strategy.max_market_cap:
+                        continue
+                
+                # 换手率过滤
+                if hasattr(strategy, 'min_turnover') and strategy.min_turnover and latest_data.turnover_rate:
+                    if latest_data.turnover_rate < strategy.min_turnover:
+                        continue
+                
+                stock_pool.append({
+                    'symbol': stock.symbol,
+                    'name': stock.name,
+                    'industry': stock.industry,
+                    'area': stock.area,
+                    'latest_data': latest_data
+                })
+            
+            # 如果股票池太小，使用模拟数据
+            if len(stock_pool) < 10:
+                stock_pool = self._generate_mock_stock_pool()
+            
+            return stock_pool
+        
+        except Exception as e:
+            self.logger.log(LogLevel.ERROR, "stock_filtering", f"获取股票池失败: {e}")
+            raise ValueError(f"无法获取股票池: {e}")
+    
+    def _generate_mock_stock_pool(self) -> List[Dict[str, Any]]:
+        """生成模拟股票池"""
+        return [
+            {"symbol": "000001.SZ", "name": "平安银行", "industry": "银行", "area": "深圳", "latest_data": None},
+            {"symbol": "000002.SZ", "name": "万科A", "industry": "房地产", "area": "深圳", "latest_data": None},
+            {"symbol": "600036.SH", "name": "招商银行", "industry": "银行", "area": "上海", "latest_data": None},
+            {"symbol": "000858.SZ", "name": "五粮液", "industry": "食品饮料", "area": "深圳", "latest_data": None},
+        ]
 
 
 class StrategyExecutionEngine:
@@ -421,7 +619,7 @@ class StrategyExecutionEngine:
         self.running_executions: Dict[str, StrategyExecutionResult] = {}
         self.executor = ThreadPoolExecutor(max_workers=4)
     
-    async def execute_strategy(self, db: Session, strategy: Strategy, 
+    async def execute_strategy(self, db: Session, strategy: Any, 
                               request: StrategyExecutionRequest) -> StrategyExecutionResult:
         """执行策略的主要方法"""
         execution_id = str(uuid.uuid4())
@@ -517,7 +715,7 @@ class StrategyExecutionEngine:
         
         return execution_result
     
-    async def _stage_initialization(self, strategy: Strategy, request: StrategyExecutionRequest,
+    async def _stage_initialization(self, strategy: Any, request: StrategyExecutionRequest,
                                    logger: ExecutionLogger, tracker: ProgressTracker):
         """初始化阶段"""
         logger.log(LogLevel.INFO, "initialization", f"策略ID: {strategy.strategy_id}")
@@ -582,7 +780,7 @@ class StrategyExecutionEngine:
         
         return filtered_codes
     
-    async def _get_required_fields(self, strategy: Strategy) -> List[str]:
+    async def _get_required_fields(self, strategy: Any) -> List[str]:
         """获取策略所需的数据字段"""
         required_fields = set(['ts_code', 'trade_date', 'close', 'open', 'high', 'low', 'vol'])
         

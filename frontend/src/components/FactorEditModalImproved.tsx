@@ -35,9 +35,9 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
   // 初始化表单数据
   useEffect(() => {
     if (factor && isOpen) {
-      setEditingFormula(factor.formula || factor.code || '');
+      setEditingFormula(factor.code || '');
       setEditingDescription(factor.description || '');
-      setEditingInputFields(factor.input_fields || ['close']);
+      setEditingInputFields(['close']); // 默认使用close字段
       setFormulaValidation(null);
       setHasChanges(false);
     }
@@ -45,9 +45,9 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
 
   // 检测变更
   useEffect(() => {
-    const originalFormula = factor.formula || factor.code || '';
+    const originalFormula = factor.code || '';
     const originalDescription = factor.description || '';
-    const originalInputFields = factor.input_fields || ['close'];
+    const originalInputFields = ['close']; // 默认字段
     
     const hasFormChanged = 
       editingFormula !== originalFormula ||
@@ -70,7 +70,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
     
     try {
       setIsValidating(true);
-      const result = await factorApi.validateFactorFormula(factor.factor_id, editingFormula);
+      const result = await factorApi.validateFactorFormula(factor.id.toString(), editingFormula);
       setFormulaValidation(result);
     } catch (error) {
       console.error('验证公式失败:', error);
@@ -110,7 +110,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
         update.input_fields = editingInputFields;
       }
       
-      await factorApi.updateFactorFormula(factor.factor_id, update);
+      await factorApi.updateFactorFormula(factor.id.toString(), update);
       
       onClose();
       alert('保存成功！');
@@ -129,7 +129,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
     if (!confirm('确定要重置此因子到原始状态吗？这将撤销所有修改。')) return;
     
     try {
-      await factorApi.resetFactorFormula(factor.factor_id);
+      await factorApi.resetFactorFormula(factor.id.toString());
       onClose();
       alert('已重置到原始状态');
       onUpdate();
@@ -151,12 +151,12 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
 
   // 生成代码模板
   const generateCodeTemplate = () => {
-    const factorId = factor.factor_id;
+    const factorId = factor.id;
     const inputFields = editingInputFields;
     
     return `def calculate_${factorId}(data):
     """
-    ${editingDescription || factor.display_name}
+    ${editingDescription || factor.name}
     
     参数:
         data: pandas.DataFrame - 包含股票历史数据
@@ -201,7 +201,7 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
   if (!isOpen || !factor) return null;
 
   return (
-    <div className="modal modal-open backdrop-blur-sm">
+    <dialog className="modal modal-open">
       <div className="modal-box max-w-6xl max-h-[90vh] bg-base-100 border border-base-300 shadow-2xl">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-base-300">
@@ -209,7 +209,7 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
             <PencilIcon className="w-6 h-6 text-primary" />
             <div>
               <h3 className="text-xl font-bold text-base-content">编辑因子</h3>
-              <p className="text-base-content/70 text-sm">{factor.display_name}</p>
+              <p className="text-base-content/70 text-sm">{factor.name}</p>
             </div>
           </div>
           
@@ -248,7 +248,7 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-base-content/70">因子ID:</span>
-                  <span className="ml-2 font-mono text-primary">{factor.factor_id}</span>
+                  <span className="ml-2 font-mono text-primary">{factor.id}</span>
                 </div>
                 <div>
                   <span className="text-base-content/70">分类:</span>
@@ -259,8 +259,8 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
                   <span className="ml-2">{factor.name}</span>
                 </div>
                 <div>
-                  <span className="text-base-content/70">显示名称:</span>
-                  <span className="ml-2">{factor.display_name}</span>
+                  <span className="text-base-content/70">代码:</span>
+                  <span className="ml-2">{factor.code.substring(0, 50)}...</span>
                 </div>
               </div>
             </div>
@@ -300,9 +300,9 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
                 </label>
                 <div className="p-3 border border-base-300 rounded-lg bg-base-200/50">
                   <div className="flex flex-wrap gap-2">
-                    {(factor.input_fields || []).map(field => (
-                      <span key=$${field} className="badge badge-outline">
-                        $${field}
+                    {['close'].map((field: string) => (
+                      <span key={field} className="badge badge-outline">
+                        {field}
                       </span>
                     ))}
                   </div>
@@ -316,8 +316,8 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
                 <h5 className="font-semibold text-info mb-3">字段使用预览</h5>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {editingInputFields.map(field => (
-                    <div key=$${field} className="bg-base-100 rounded p-2 text-sm">
-                      <span className="font-mono text-primary">data['$${field}']</span>
+                    <div key={field} className="bg-base-100 rounded p-2 text-sm">
+                      <span className="font-mono text-primary">data['{field}']</span>
                       <div className="text-base-content/70">{getFieldDescription(field)}</div>
                     </div>
                   ))}
@@ -464,7 +464,10 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
           </div>
         </div>
       </div>
-    </div>
+      <form method="dialog" className="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   );
 };
 
