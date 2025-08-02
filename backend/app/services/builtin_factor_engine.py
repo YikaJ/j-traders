@@ -20,6 +20,8 @@ from .parametric_factor_service import parametric_factor_service
 from .alpha101_extended import alpha101_extended_service
 from .alpha101_more_factors import alpha101_more_factors_service
 from .alpha101_phase2 import alpha101_phase2_service
+from .alpha101_phase3 import alpha101_phase3_service
+from .alpha101_phase4 import alpha101_phase4_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,8 @@ class BuiltinFactorEngine:
         self.alpha101_extended_service = alpha101_extended_service
         self.alpha101_more_factors_service = alpha101_more_factors_service
         self.alpha101_phase2_service = alpha101_phase2_service
+        self.alpha101_phase3_service = alpha101_phase3_service
+        self.alpha101_phase4_service = alpha101_phase4_service
         
         # 创建统一的因子注册表
         self.factor_registry = {}
@@ -115,6 +119,22 @@ class BuiltinFactorEngine:
                 **factor,
                 'service': self.alpha101_phase2_service,
                 'category': 'alpha101_phase2'
+            }
+        
+        # 注册Alpha101 Phase3因子 (Alpha041-080，适合A股)
+        for factor in self.alpha101_phase3_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_phase3_service,
+                'category': 'alpha101_phase3'
+            }
+        
+        # 注册Alpha101 Phase4因子 (Alpha061-101，适合A股)
+        for factor in self.alpha101_phase4_service.get_available_factors():
+            self.factor_registry[factor['factor_id']] = {
+                **factor,
+                'service': self.alpha101_phase4_service,
+                'category': 'alpha101_phase4'
             }
         
         logger.info(f"已注册 {len(self.factor_registry)} 个内置因子")

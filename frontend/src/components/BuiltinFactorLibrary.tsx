@@ -90,8 +90,10 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
       'alpha101': 'Alpha101因子',
       'alpha101_extended': 'Alpha101扩展因子',
       'alpha101_more_factors': 'Alpha101增强因子',
-      'alpha101_phase2': 'Alpha101第二阶段',
-      'parametric': '参数化因子'
+          'alpha101_phase2': 'Alpha101第二阶段',
+    'alpha101_phase3': 'Alpha101第三阶段',
+    'alpha101_phase4': 'Alpha101第四阶段',
+    'parametric': '参数化因子'
     };
     return categoryMap[category] || category;
   };
@@ -108,6 +110,8 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
       'alpha101_extended': 'ExtensionOutlined',
       'alpha101_more_factors': 'AutoAwesomeOutlined',
       'alpha101_phase2': 'SchoolOutlined',
+      'alpha101_phase3': 'ScienceOutlined',
+      'alpha101_phase4': 'PsychologyOutlined',
       'parametric': 'TuneOutlined'
     };
     return iconMap[category] || 'HelpOutlined';
