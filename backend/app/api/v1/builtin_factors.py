@@ -55,6 +55,20 @@ class BatchCalculationResponse(BaseModel):
     total_execution_time: float
 
 
+class FactorFormulaUpdateRequest(BaseModel):
+    """因子公式更新请求"""
+    formula: str
+    description: Optional[str] = None
+    
+class FactorFormulaResponse(BaseModel):
+    """因子公式响应"""
+    factor_id: str
+    formula: str
+    description: str
+    updated_at: str
+    success: bool
+
+
 @router.get("/", response_model=List[BuiltinFactorResponse])
 async def list_builtin_factors(
     category: Optional[str] = Query(None, description="因子分类筛选"),
@@ -490,3 +504,125 @@ async def clear_engine_cache():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"清除缓存失败: {str(e)}")
+
+
+@router.put("/builtin-factors/{factor_id}/formula")
+async def update_factor_formula(
+    factor_id: str,
+    request: FactorFormulaUpdateRequest,
+    engine: BuiltinFactorEngine = Depends(get_builtin_factor_engine)
+):
+    """
+    更新因子计算公式
+    """
+    try:
+        # 验证因子是否存在
+        factor_info = engine.get_factor_info(factor_id)
+        if not factor_info:
+            raise HTTPException(status_code=404, detail=f"因子 {factor_id} 不存在")
+        
+        # 更新公式
+        success = engine.update_factor_formula(factor_id, request.formula, request.description)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="公式更新失败")
+        
+        # 获取更新后的因子信息
+        updated_info = engine.get_factor_info(factor_id)
+        
+        return FactorFormulaResponse(
+            factor_id=factor_id,
+            formula=updated_info.get('formula', ''),
+            description=updated_info.get('description', ''),
+            updated_at=datetime.utcnow().isoformat(),
+            success=True
+        )
+        
+    except Exception as e:
+        logger.error(f"更新因子公式失败: {e}")
+        raise HTTPException(status_code=500, detail=f"更新因子公式失败: {str(e)}")
+
+@router.post("/builtin-factors/{factor_id}/validate-formula")
+async def validate_factor_formula(
+    factor_id: str,
+    request: FactorFormulaUpdateRequest,
+    engine: BuiltinFactorEngine = Depends(get_builtin_factor_engine)
+):
+    """
+    验证因子公式的有效性
+    """
+    try:
+        # 验证因子是否存在
+        factor_info = engine.get_factor_info(factor_id)
+        if not factor_info:
+            raise HTTPException(status_code=404, detail=f"因子 {factor_id} 不存在")
+        
+        # 验证公式语法
+        validation_result = engine.validate_factor_formula(factor_id, request.formula)
+        
+        return {
+            "factor_id": factor_id,
+            "formula": request.formula,
+            "is_valid": validation_result.get('is_valid', False),
+            "error_message": validation_result.get('error_message'),
+            "warnings": validation_result.get('warnings', [])
+        }
+        
+    except Exception as e:
+        logger.error(f"验证因子公式失败: {e}")
+        raise HTTPException(status_code=500, detail=f"验证因子公式失败: {str(e)}")
+
+@router.get("/builtin-factors/{factor_id}/formula-history")
+async def get_factor_formula_history(
+    factor_id: str,
+    engine: BuiltinFactorEngine = Depends(get_builtin_factor_engine)
+):
+    """
+    获取因子公式历史记录
+    """
+    try:
+        # 验证因子是否存在
+        factor_info = engine.get_factor_info(factor_id)
+        if not factor_info:
+            raise HTTPException(status_code=404, detail=f"因子 {factor_id} 不存在")
+        
+        # 获取历史记录
+        history = engine.get_factor_formula_history(factor_id)
+        
+        return {
+            "factor_id": factor_id,
+            "history": history
+        }
+        
+    except Exception as e:
+        logger.error(f"获取因子公式历史失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取因子公式历史失败: {str(e)}")
+
+@router.post("/builtin-factors/{factor_id}/reset-formula")
+async def reset_factor_formula(
+    factor_id: str,
+    engine: BuiltinFactorEngine = Depends(get_builtin_factor_engine)
+):
+    """
+    重置因子公式到原始状态
+    """
+    try:
+        # 验证因子是否存在
+        factor_info = engine.get_factor_info(factor_id)
+        if not factor_info:
+            raise HTTPException(status_code=404, detail=f"因子 {factor_id} 不存在")
+        
+        # 重置公式
+        success = engine.reset_factor_formula(factor_id)
+        
+        if not success:
+            raise HTTPException(status_code=400, detail="公式重置失败")
+        
+        return {
+            "success": True,
+            "message": f"因子 {factor_id} 的公式已重置到原始状态"
+        }
+        
+    except Exception as e:
+        logger.error(f"重置因子公式失败: {e}")
+        raise HTTPException(status_code=500, detail=f"重置因子公式失败: {str(e)}")

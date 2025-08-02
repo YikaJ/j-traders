@@ -1,0 +1,13 @@
+{
+  "test_factor_001": [
+    {
+      "timestamp": "2025-08-02T06:56:13.328661",
+      "old_formula": "rank(close)",
+      "new_formula": "delta(close, 1)",
+      "description_change": {
+        "old": "原始测试因子",
+        "new": "API测试公式"
+      }
+    }
+  ]
+}

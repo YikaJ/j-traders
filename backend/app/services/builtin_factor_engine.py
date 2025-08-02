@@ -1,6 +1,6 @@
 """
-内置因子计算引擎
-统一管理和调度所有内置因子的计算
+内置因子引擎
+统一管理所有内置因子的计算和调度
 """
 
 import pandas as pd
@@ -10,6 +10,8 @@ import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import json
+import os
 
 from .builtin_factor_service import FactorCategory
 from .builtin_factor_service import TrendFactorService
@@ -27,10 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class BuiltinFactorEngine:
-    """
-    内置因子计算引擎
-    统一管理所有类别的内置因子计算
-    """
+    """内置因子计算引擎"""
     
     def __init__(self):
         # 初始化各类因子服务
@@ -54,6 +53,236 @@ class BuiltinFactorEngine:
         self.cache_enabled = True
         self.calculation_cache = {}
         self.cache_expiry = 3600  # 1小时过期
+        
+        # 添加公式历史记录存储
+        self.formula_history_file = "factor_formula_history.json"
+        self._load_formula_history()
+    
+    def _load_formula_history(self):
+        """加载公式历史记录"""
+        try:
+            if os.path.exists(self.formula_history_file):
+                with open(self.formula_history_file, 'r', encoding='utf-8') as f:
+                    self.formula_history = json.load(f)
+            else:
+                self.formula_history = {}
+        except Exception as e:
+            logger.warning(f"加载公式历史记录失败: {e}")
+            self.formula_history = {}
+    
+    def _save_formula_history(self):
+        """保存公式历史记录"""
+        try:
+            with open(self.formula_history_file, 'w', encoding='utf-8') as f:
+                json.dump(self.formula_history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存公式历史记录失败: {e}")
+    
+    def update_factor_formula(self, factor_id: str, new_formula: str, description: Optional[str] = None) -> bool:
+        """
+        更新因子公式
+        
+        Args:
+            factor_id: 因子ID
+            new_formula: 新的计算公式
+            description: 可选的描述更新
+            
+        Returns:
+            bool: 更新是否成功
+        """
+        try:
+            if factor_id not in self.factor_registry:
+                logger.error(f"因子 {factor_id} 不存在")
+                return False
+            
+            factor_info = self.factor_registry[factor_id]
+            old_formula = factor_info.get('formula', '')
+            
+            # 记录历史
+            if factor_id not in self.formula_history:
+                self.formula_history[factor_id] = []
+            
+            history_entry = {
+                'timestamp': datetime.utcnow().isoformat(),
+                'old_formula': old_formula,
+                'new_formula': new_formula,
+                'description_change': {
+                    'old': factor_info.get('description', ''),
+                    'new': description or factor_info.get('description', '')
+                }
+            }
+            
+            self.formula_history[factor_id].append(history_entry)
+            
+            # 更新因子信息
+            self.factor_registry[factor_id]['formula'] = new_formula
+            if description is not None:
+                self.factor_registry[factor_id]['description'] = description
+                
+            # 保存历史记录
+            self._save_formula_history()
+            
+            logger.info(f"因子 {factor_id} 公式已更新")
+            return True
+            
+        except Exception as e:
+            logger.error(f"更新因子公式失败: {e}")
+            return False
+    
+    def validate_factor_formula(self, factor_id: str, formula: str) -> Dict[str, Any]:
+        """
+        验证因子公式的有效性
+        
+        Args:
+            factor_id: 因子ID
+            formula: 要验证的公式
+            
+        Returns:
+            Dict: 验证结果
+        """
+        try:
+            if factor_id not in self.factor_registry:
+                return {
+                    'is_valid': False,
+                    'error_message': f"因子 {factor_id} 不存在"
+                }
+            
+            warnings = []
+            
+            # 基本语法检查
+            if not formula or not formula.strip():
+                return {
+                    'is_valid': False,
+                    'error_message': "公式不能为空"
+                }
+            
+            # 检查常见的函数名
+            common_functions = [
+                'rank', 'delay', 'delta', 'correlation', 'covariance', 'ts_rank', 
+                'ts_min', 'ts_max', 'ts_argmin', 'ts_argmax', 'decay_linear',
+                'sum_series', 'stddev', 'signedpower', 'scale'
+            ]
+            
+            # 检查是否包含常用变量
+            common_variables = ['open', 'close', 'high', 'low', 'volume', 'vwap', 'returns']
+            
+            has_function = any(func in formula.lower() for func in common_functions)
+            has_variable = any(var in formula.lower() for var in common_variables)
+            
+            if not has_variable:
+                warnings.append("公式中似乎没有包含常用的价格或成交量变量")
+            
+            # 检查括号匹配
+            open_parens = formula.count('(')
+            close_parens = formula.count(')')
+            if open_parens != close_parens:
+                return {
+                    'is_valid': False,
+                    'error_message': f"括号不匹配：开括号 {open_parens} 个，闭括号 {close_parens} 个"
+                }
+            
+            # 检查是否包含危险操作
+            dangerous_keywords = ['import', 'exec', 'eval', '__', 'delete', 'rm ', 'os.']
+            for keyword in dangerous_keywords:
+                if keyword in formula.lower():
+                    return {
+                        'is_valid': False,
+                        'error_message': f"公式包含不安全的关键词: {keyword}"
+                    }
+            
+            # 尝试简单的语法检查（模拟Python表达式）
+            try:
+                # 替换常用函数为Python可识别的形式进行基本语法检查
+                test_formula = formula.lower()
+                for func in common_functions:
+                    test_formula = test_formula.replace(func, 'abs')
+                for var in common_variables:
+                    test_formula = test_formula.replace(var, '1')
+                
+                # 尝试编译表达式（但不执行）
+                compile(test_formula, '<string>', 'eval')
+                
+            except SyntaxError as e:
+                return {
+                    'is_valid': False,
+                    'error_message': f"语法错误: {str(e)}"
+                }
+            except Exception:
+                # 其他错误不影响验证结果，因为我们只是做基本检查
+                pass
+            
+            return {
+                'is_valid': True,
+                'error_message': None,
+                'warnings': warnings
+            }
+            
+        except Exception as e:
+            logger.error(f"验证因子公式失败: {e}")
+            return {
+                'is_valid': False,
+                'error_message': f"验证过程出错: {str(e)}"
+            }
+    
+    def get_factor_formula_history(self, factor_id: str) -> List[Dict[str, Any]]:
+        """
+        获取因子公式历史记录
+        
+        Args:
+            factor_id: 因子ID
+            
+        Returns:
+            List: 历史记录列表
+        """
+        try:
+            if factor_id not in self.factor_registry:
+                raise ValueError(f"因子 {factor_id} 不存在")
+            
+            history = self.formula_history.get(factor_id, [])
+            
+            # 按时间倒序排列（最新的在前）
+            history.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            return history
+            
+        except Exception as e:
+            logger.error(f"获取因子公式历史失败: {e}")
+            return []
+    
+    def reset_factor_formula(self, factor_id: str) -> bool:
+        """
+        重置因子公式到原始状态
+        
+        Args:
+            factor_id: 因子ID
+            
+        Returns:
+            bool: 重置是否成功
+        """
+        try:
+            if factor_id not in self.factor_registry:
+                logger.error(f"因子 {factor_id} 不存在")
+                return False
+            
+            # 获取原始服务中的因子信息
+            factor_info = self.factor_registry[factor_id]
+            service = factor_info.get('service')
+            
+            if service:
+                original_info = service.get_factor_info(factor_id)
+                if original_info:
+                    return self.update_factor_formula(
+                        factor_id, 
+                        original_info.get('formula', ''),
+                        f"重置到原始公式 - {original_info.get('description', '')}"
+                    )
+            
+            logger.warning(f"无法找到因子 {factor_id} 的原始公式")
+            return False
+            
+        except Exception as e:
+            logger.error(f"重置因子公式失败: {e}")
+            return False
     
     def _build_unified_registry(self):
         """构建统一的因子注册表"""

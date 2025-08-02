@@ -212,6 +212,37 @@ export interface WeightOptimizationResult {
   analysis_details: Record<string, any>;
 }
 
+export interface FactorFormulaUpdate {
+  formula: string;
+  description?: string;
+}
+
+export interface FactorFormulaResponse {
+  factor_id: string;
+  formula: string;
+  description: string;
+  updated_at: string;
+  success: boolean;
+}
+
+export interface FormulaValidationResult {
+  factor_id: string;
+  formula: string;
+  is_valid: boolean;
+  error_message?: string;
+  warnings?: string[];
+}
+
+export interface FormulaHistoryEntry {
+  timestamp: string;
+  old_formula: string;
+  new_formula: string;
+  description_change: {
+    old: string;
+    new: string;
+  };
+}
+
 // ====== API 接口 ======
 
 // 市场数据API
@@ -296,6 +327,32 @@ export const builtinFactorApi = {
   // 清除缓存
   clearCache: async () => {
     return api.post('/builtin-factors/engine/clear-cache');
+  },
+
+  // 更新因子公式
+  updateFactorFormula: async (factorId: string, update: FactorFormulaUpdate): Promise<FactorFormulaResponse> => {
+    const response = await api.put(`/api/v1/builtin-factors/${factorId}/formula`, update);
+    return response.data;
+  },
+
+  // 验证因子公式
+  validateFactorFormula: async (factorId: string, formula: string): Promise<FormulaValidationResult> => {
+    const response = await api.post(`/api/v1/builtin-factors/${factorId}/validate-formula`, {
+      formula,
+    });
+    return response.data;
+  },
+
+  // 获取因子公式历史记录
+  getFactorFormulaHistory: async (factorId: string): Promise<{ factor_id: string; history: FormulaHistoryEntry[] }> => {
+    const response = await api.get(`/api/v1/builtin-factors/${factorId}/formula-history`);
+    return response.data;
+  },
+
+  // 重置因子公式
+  resetFactorFormula: async (factorId: string): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/api/v1/builtin-factors/${factorId}/reset-formula`);
+    return response.data;
   },
 };
 

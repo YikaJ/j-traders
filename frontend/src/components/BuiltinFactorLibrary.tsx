@@ -6,9 +6,22 @@ import {
   ChartBarIcon,
   EyeIcon,
   PlusIcon,
-  Cog6ToothIcon
+  Cog6ToothIcon,
+  PencilIcon,
+  ClockIcon,
+  CheckIcon,
+  XMarkIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
-import { builtinFactorApi, BuiltinFactor, FactorParameters, SelectedFactor } from '../services/api';
+import { 
+  builtinFactorApi, 
+  BuiltinFactor, 
+  FactorParameters, 
+  SelectedFactor,
+  FactorFormulaUpdate,
+  FormulaValidationResult,
+  FormulaHistoryEntry
+} from '../services/api';
 
 interface BuiltinFactorLibraryProps {
   onFactorSelect?: (factor: SelectedFactor) => void;
@@ -33,6 +46,14 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
   const [parameterForm, setParameterForm] = useState<FactorParameters>({});
   const [factorDetails, setFactorDetails] = useState<any>(null);
   const [showFormulaModal, setShowFormulaModal] = useState(false);
+  const [showEditFormulaModal, setShowEditFormulaModal] = useState(false);
+  const [showFormulaHistoryModal, setShowFormulaHistoryModal] = useState(false);
+  const [editingFormula, setEditingFormula] = useState('');
+  const [editingDescription, setEditingDescription] = useState('');
+  const [formulaValidation, setFormulaValidation] = useState<FormulaValidationResult | null>(null);
+  const [formulaHistory, setFormulaHistory] = useState<FormulaHistoryEntry[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // 加载因子数据
   const loadFactors = async () => {
@@ -164,6 +185,98 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
   // 检查因子是否已选择
   const isFactorSelected = (factorId: string) => {
     return selectedFactors.some(f => f.factor_id === factorId);
+  };
+
+  // 编辑因子公式
+  const handleEditFormula = async (factor: BuiltinFactor) => {
+    try {
+      const response = await builtinFactorApi.getFactorInfo(factor.factor_id);
+      setFactorDetails(response);
+      setSelectedFactor(factor);
+      setEditingFormula(response.formula || '');
+      setEditingDescription(response.description || '');
+      setFormulaValidation(null);
+      setShowEditFormulaModal(true);
+    } catch (error) {
+      console.error('获取因子详情失败:', error);
+    }
+  };
+
+  // 验证公式
+  const handleValidateFormula = async () => {
+    if (!selectedFactor || !editingFormula.trim()) return;
+    
+    try {
+      setIsValidating(true);
+      const result = await builtinFactorApi.validateFactorFormula(selectedFactor.factor_id, editingFormula);
+      setFormulaValidation(result);
+    } catch (error) {
+      console.error('验证公式失败:', error);
+      setFormulaValidation({
+        factor_id: selectedFactor.factor_id,
+        formula: editingFormula,
+        is_valid: false,
+        error_message: '验证失败，请检查网络连接'
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // 保存公式
+  const handleSaveFormula = async () => {
+    if (!selectedFactor || !editingFormula.trim()) return;
+    
+    try {
+      setIsSaving(true);
+      const update: FactorFormulaUpdate = {
+        formula: editingFormula,
+        description: editingDescription || undefined
+      };
+      
+      await builtinFactorApi.updateFactorFormula(selectedFactor.factor_id, update);
+      
+      // 重新加载因子数据
+      await loadFactors();
+      
+      // 关闭编辑模态框
+      setShowEditFormulaModal(false);
+      
+      // 显示成功消息
+      alert('公式保存成功！');
+      
+    } catch (error) {
+      console.error('保存公式失败:', error);
+      alert('保存公式失败，请重试');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 查看公式历史
+  const handleViewFormulaHistory = async (factor: BuiltinFactor) => {
+    try {
+      const response = await builtinFactorApi.getFactorFormulaHistory(factor.factor_id);
+      setFormulaHistory(response.history);
+      setSelectedFactor(factor);
+      setShowFormulaHistoryModal(true);
+    } catch (error) {
+      console.error('获取公式历史失败:', error);
+    }
+  };
+
+  // 重置公式
+  const handleResetFormula = async (factor: BuiltinFactor) => {
+    if (!confirm('确定要重置此因子的公式到原始状态吗？')) return;
+    
+    try {
+      await builtinFactorApi.resetFactorFormula(factor.factor_id);
+      await loadFactors();
+      alert('公式已重置到原始状态');
+    } catch (error) {
+      console.error('重置公式失败:', error);
+      alert('重置公式失败，请重试');
+    }
   };
 
   if (loading) {
@@ -315,6 +428,20 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
                     >
                       <InformationCircleIcon className="w-3 h-3" />
                       公式
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => handleEditFormula(factor)}
+                    >
+                      <PencilIcon className="w-3 h-3" />
+                      编辑
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => handleViewFormulaHistory(factor)}
+                    >
+                      <ClockIcon className="w-3 h-3" />
+                      历史
                     </button>
                   </div>
 
@@ -704,6 +831,210 @@ const BuiltinFactorLibrary: React.FC<BuiltinFactorLibraryProps> = ({
                   添加到策略
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑公式模态框 */}
+      {showEditFormulaModal && selectedFactor && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-4xl">
+            <h3 className="font-bold text-lg mb-4">
+              编辑因子公式 - {selectedFactor.display_name}
+            </h3>
+
+            <div className="space-y-4">
+              {/* 基本信息 */}
+              <div className="bg-base-200 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2">因子信息</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">因子ID：</span>
+                    <code className="bg-base-300 px-2 py-1 rounded">{selectedFactor.factor_id}</code>
+                  </div>
+                  <div>
+                    <span className="font-medium">分类：</span>
+                    <span className="badge badge-sm ml-2">{getCategoryDisplayName(selectedFactor.category)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 公式编辑区 */}
+              <div className="space-y-3">
+                <div>
+                  <label className="label">
+                    <span className="label-text font-medium">计算公式</span>
+                    <div className="flex gap-2">
+                      <button
+                        className={`btn btn-xs ${isValidating ? 'loading' : ''}`}
+                        onClick={handleValidateFormula}
+                        disabled={isValidating || !editingFormula.trim()}
+                      >
+                        {isValidating ? '验证中...' : '验证公式'}
+                      </button>
+                      <button
+                        className="btn btn-xs btn-ghost"
+                        onClick={() => handleResetFormula(selectedFactor)}
+                      >
+                        <ArrowPathIcon className="w-3 h-3" />
+                        重置
+                      </button>
+                    </div>
+                  </label>
+                  <textarea
+                    className="textarea textarea-bordered w-full h-32 font-mono text-sm"
+                    placeholder="输入因子计算公式..."
+                    value={editingFormula}
+                    onChange={(e) => setEditingFormula(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">
+                    <span className="label-text font-medium">描述（可选）</span>
+                  </label>
+                  <textarea
+                    className="textarea textarea-bordered w-full h-20"
+                    placeholder="因子描述..."
+                    value={editingDescription}
+                    onChange={(e) => setEditingDescription(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* 验证结果 */}
+              {formulaValidation && (
+                <div className={`alert ${formulaValidation.is_valid ? 'alert-success' : 'alert-error'}`}>
+                  <div className="flex items-center gap-2">
+                    {formulaValidation.is_valid ? (
+                      <CheckIcon className="w-5 h-5" />
+                    ) : (
+                      <XMarkIcon className="w-5 h-5" />
+                    )}
+                    <div>
+                      <div className="font-medium">
+                        {formulaValidation.is_valid ? '公式验证通过' : '公式验证失败'}
+                      </div>
+                      {formulaValidation.error_message && (
+                        <div className="text-sm opacity-80">
+                          {formulaValidation.error_message}
+                        </div>
+                      )}
+                      {formulaValidation.warnings && formulaValidation.warnings.length > 0 && (
+                        <div className="text-sm opacity-80">
+                          警告：{formulaValidation.warnings.join('；')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 帮助提示 */}
+              <div className="bg-base-200 p-4 rounded-lg">
+                <h4 className="font-semibold mb-2">常用函数</h4>
+                <div className="text-xs space-y-1">
+                  <div><code>rank(x)</code> - 排序函数</div>
+                  <div><code>delay(x, d)</code> - 滞后函数</div>
+                  <div><code>delta(x, d)</code> - 差分函数</div>
+                  <div><code>ts_rank(x, d)</code> - 时序排序</div>
+                  <div><code>correlation(x, y, d)</code> - 相关系数</div>
+                  <div><code>stddev(x, d)</code> - 标准差</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-action">
+              <button
+                className="btn"
+                onClick={() => {
+                  setShowEditFormulaModal(false);
+                  setFormulaValidation(null);
+                }}
+              >
+                取消
+              </button>
+              <button
+                className={`btn btn-primary ${isSaving ? 'loading' : ''}`}
+                onClick={handleSaveFormula}
+                disabled={isSaving || !editingFormula.trim() || (formulaValidation && !formulaValidation.is_valid)}
+              >
+                {isSaving ? '保存中...' : '保存公式'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 公式历史记录模态框 */}
+      {showFormulaHistoryModal && selectedFactor && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-3xl">
+            <h3 className="font-bold text-lg mb-4">
+              公式历史记录 - {selectedFactor.display_name}
+            </h3>
+
+            <div className="space-y-4">
+              {formulaHistory.length === 0 ? (
+                <div className="text-center py-8 text-base-content/60">
+                  暂无历史记录
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {formulaHistory.map((entry, index) => (
+                    <div key={index} className="bg-base-200 p-4 rounded-lg">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="text-sm text-base-content/70">
+                          {new Date(entry.timestamp).toLocaleString('zh-CN')}
+                        </div>
+                        <div className="badge badge-outline badge-sm">
+                          第 {formulaHistory.length - index} 次修改
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-xs font-medium text-red-600 mb-1">修改前：</div>
+                          <code className="block bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs">
+                            {entry.old_formula || '(空)'}
+                          </code>
+                        </div>
+                        
+                        <div>
+                          <div className="text-xs font-medium text-green-600 mb-1">修改后：</div>
+                          <code className="block bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs">
+                            {entry.new_formula}
+                          </code>
+                        </div>
+
+                        {entry.description_change.new !== entry.description_change.old && (
+                          <div>
+                            <div className="text-xs font-medium text-blue-600 mb-1">描述变更：</div>
+                            <div className="text-xs">
+                              <div className="text-red-600">
+                                旧：{entry.description_change.old || '(空)'}
+                              </div>
+                              <div className="text-green-600">
+                                新：{entry.description_change.new || '(空)'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-action">
+              <button
+                className="btn"
+                onClick={() => setShowFormulaHistoryModal(false)}
+              >
+                关闭
+              </button>
             </div>
           </div>
         </div>
