@@ -36,7 +36,7 @@ class StrategyManagementService:
         """创建新策略"""
         try:
             # 验证因子存在性
-            await self._validate_factors(db, strategy_data.factors)
+            self._validate_factors(db, strategy_data.factors)
             
             # 创建策略记录
             db_strategy = Strategy(
@@ -255,25 +255,32 @@ class StrategyManagementService:
     
     async def _validate_factors(self, db: Session, factors: List) -> None:
         """验证因子存在性"""
-        factor_ids = [factor.factor_id for factor in factors]
-        
-        # 尝试通过factor_id查找
-        existing_factors = db.query(Factor).filter(Factor.factor_id.in_(factor_ids)).all()
-        existing_ids = {factor.factor_id for factor in existing_factors}
-        
-        # 如果通过factor_id没找到，尝试通过数字ID查找
-        if not existing_factors:
-            try:
-                numeric_ids = [int(fid) for fid in factor_ids if fid.isdigit()]
-                if numeric_ids:
-                    existing_factors = db.query(Factor).filter(Factor.id.in_(numeric_ids)).all()
-                    existing_ids = {str(factor.id) for factor in existing_factors}
-            except ValueError:
-                pass
-        
-        missing_ids = set(factor_ids) - existing_ids
-        if missing_ids:
-            raise ValueError(f"因子不存在: {', '.join(missing_ids)}")
+        try:
+            # 验证因子是否存在
+            ids = [factor.id for factor in factors]
+            logger.info(f"验证因子ID: {ids}")
+            
+            # 先尝试通过数字ID查找
+            numeric_ids = [int(fid) for fid in ids if fid.isdigit()]
+            if numeric_ids:
+                existing_factors = db.query(Factor).filter(Factor.id.in_(numeric_ids)).all()
+                existing_ids = {str(factor.id) for factor in existing_factors}
+                missing_ids = set(ids) - existing_ids
+                
+                if missing_ids:
+                    raise ValueError(f"因子不存在: {', '.join(missing_ids)}")
+            else:
+                # 如果数字ID查找失败，尝试通过id查找
+                existing_factors = db.query(Factor).filter(Factor.id.in_(ids)).all()
+                existing_ids = {factor.id for factor in existing_factors}
+                missing_ids = set(ids) - existing_ids
+                
+                if missing_ids:
+                    raise ValueError(f"因子不存在: {', '.join(missing_ids)}")
+                
+        except Exception as e:
+            logger.error(f"因子验证过程中出错: {e}")
+            raise
     
     def _strategy_to_response(self, strategy: Strategy) -> StrategyResponse:
         """转换策略模型为响应模型"""

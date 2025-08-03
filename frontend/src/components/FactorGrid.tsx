@@ -66,9 +66,9 @@ const FactorGrid: React.FC<FactorGridProps> = ({
     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
       {factors.map((factor) => (
         <div
-          key={factor.factor_id}
+          key={factor.id}
           className={`card bg-base-200 shadow-md hover:shadow-lg transition-all ${
-            isFactorSelected(factor.factor_id) ? 'ring-2 ring-success' : ''
+            isFactorSelected(factor.id) ? 'ring-2 ring-success' : ''
           }`}
         >
           <div className="card-body p-4">
@@ -145,15 +145,15 @@ const FactorGrid: React.FC<FactorGridProps> = ({
               {mode === 'selection' && (
                 <button
                   className={`btn btn-xs ${
-                    isFactorSelected(factor.factor_id)
+                    isFactorSelected(factor.id)
                       ? 'btn-success'
                       : 'btn-primary'
                   }`}
                   onClick={() => onFactorAction('select', factor)}
-                  disabled={isFactorSelected(factor.factor_id)}
-                  title={isFactorSelected(factor.factor_id) ? '已选择' : '添加到策略'}
+                  disabled={isFactorSelected(factor.id)}
+                  title={isFactorSelected(factor.id) ? '已选择' : '添加到策略'}
                 >
-                  {isFactorSelected(factor.factor_id) ? (
+                  {isFactorSelected(factor.id) ? (
                     <>已选择</>
                   ) : (
                     <>

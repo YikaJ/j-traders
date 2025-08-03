@@ -55,7 +55,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
     try {
       setLoadingFactors(true);
       const factors = await factorApi.getFactors();
-      setAvailableFactors(factors.filter(f => f.isActive));
+      setAvailableFactors(factors.filter(f => f.is_active));
     } catch (error) {
       console.error('加载因子失败:', error);
     } finally {
@@ -145,7 +145,6 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
   const handleAddFactor = (factor: Factor) => {
     const newStrategyFactor: StrategyFactor = {
       factor_id: factor.id.toString(),
-      factor_name: factor.name,
       weight: 0,
       is_enabled: true
     };
@@ -230,7 +229,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
 
   // 获取未选择的因子
   const getUnselectedFactors = () => {
-    const selectedIds = new Set(strategyForm.factors.map(f => f.factor_id));
+    const selectedIds = new Set(strategyForm.factors.map(f => f.id));
     return availableFactors.filter(f => !selectedIds.has(f.id.toString()));
   };
 
@@ -388,17 +387,17 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     {strategyForm.factors.map((factor) => (
-                      <div key={factor.factor_id} className="flex items-center gap-4 p-3 bg-base-100 rounded border">
+                      <div key={factor.id} className="flex items-center gap-4 p-3 bg-base-100 rounded border">
                         <input
                           type="checkbox"
                           className="checkbox checkbox-primary"
                           checked={factor.is_enabled}
-                          onChange={() => handleToggleFactor(factor.factor_id)}
+                          onChange={() => handleToggleFactor(factor.id)}
                         />
                         
                         <div className="flex-1">
-                          <div className="font-medium text-base-content">{factor.factor_name}</div>
-                          <div className="text-sm text-base-content/70">{factor.factor_id}</div>
+                          <div className="font-medium text-base-content">{factor.name}</div>
+                          <div className="text-sm text-base-content/70">{factor.id}</div>
                         </div>
                         
                         <div className="flex items-center gap-2">
@@ -410,14 +409,14 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
                             max="1"
                             step="0.001"
                             value={factor.weight.toFixed(3)}
-                            onChange={(e) => handleUpdateFactorWeight(factor.factor_id, parseFloat(e.target.value) || 0)}
+                            onChange={(e) => handleUpdateFactorWeight(factor.id, parseFloat(e.target.value) || 0)}
                             disabled={!factor.is_enabled}
                           />
                         </div>
                         
                         <button
                           className="btn btn-sm btn-ghost btn-circle text-error"
-                          onClick={() => handleRemoveFactor(factor.factor_id)}
+                          onClick={() => handleRemoveFactor(factor.id)}
                         >
                           <XMarkIcon className="w-4 h-4" />
                         </button>

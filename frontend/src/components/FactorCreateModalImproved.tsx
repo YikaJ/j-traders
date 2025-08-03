@@ -21,7 +21,6 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
   onCreated,
 }) => {
   const [createFactorForm, setCreateFactorForm] = useState({
-    factor_id: '',
     name: '',
     display_name: '',
     description: '',
@@ -74,12 +73,6 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
   const validateForm = (): string[] => {
     const errors: string[] = [];
 
-    if (!createFactorForm.factor_id.trim()) {
-      errors.push('请填写因子ID');
-    } else if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(createFactorForm.factor_id)) {
-      errors.push('因子ID只能包含字母、数字和下划线，且必须以字母开头');
-    }
-
     if (!createFactorForm.name.trim()) {
       errors.push('请填写因子名称');
     }
@@ -111,13 +104,13 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
       setIsCreating(true);
       setValidationErrors([]);
 
-      const factorData: CustomFactorCreateRequest = {
-        factor_id: createFactorForm.factor_id,
+      // 转换为后端期望的格式
+      const factorData = {
         name: createFactorForm.name,
         display_name: createFactorForm.display_name,
         description: createFactorForm.description,
         category: createFactorForm.category,
-        formula: createFactorForm.formula,
+        code: createFactorForm.formula,  // 将formula映射为code
         input_fields: createFactorForm.input_fields,
         default_parameters: createFactorForm.default_parameters,
         calculation_method: createFactorForm.calculation_method,
@@ -144,7 +137,6 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
   // 重置表单
   const handleResetForm = () => {
     setCreateFactorForm({
-      factor_id: '',
       name: '',
       display_name: '',
       description: '',
@@ -160,17 +152,16 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
 
   // 生成默认代码模板
   const generateDefaultCode = () => {
-    const factorId = createFactorForm.factor_id || 'custom_factor';
     const inputFields =
       createFactorForm.input_fields.length > 0
         ? createFactorForm.input_fields
         : ['close'];
 
     const dataAccess = inputFields
-      .map((field) => `    $${field} = data['$${field}']`)
+      .map((field) => `    ${field} = data['${field}']`)
       .join('\n');
 
-    return `def calculate_${factorId}(data):
+    return `def calculate(data):
     """
     ${createFactorForm.description || '自定义因子计算函数'}
     
@@ -179,15 +170,12 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
         
     可用字段:
 ${inputFields
-  .map((field) => `        - $${field}: ${getFieldDescription(field)}`)
+  .map((field) => `        - ${field}: ${getFieldDescription(field)}`)
   .join('\n')}
     
     返回:
         pandas.Series - 计算得到的因子值
     """
-    import pandas as pd
-    import numpy as np
-    
     # 获取输入数据
 ${dataAccess}
     
@@ -324,27 +312,6 @@ ${dataAccess}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="form-control">
                   <label className="label">
-                    <span className="label-text font-medium">因子ID *</span>
-                    <span className="label-text-alt text-xs">
-                      用于代码中的标识符
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    className="input input-bordered bg-base-100 focus:border-primary"
-                    placeholder="例如: momentum_factor_001"
-                    value={createFactorForm.factor_id}
-                    onChange={(e) =>
-                      setCreateFactorForm({
-                        ...createFactorForm,
-                        factor_id: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">
                     <span className="label-text font-medium">因子名称 *</span>
                     <span className="label-text-alt text-xs">英文名称</span>
                   </label>
@@ -434,7 +401,6 @@ ${dataAccess}
                   className="btn btn-primary"
                   onClick={() => setCurrentStep(2)}
                   disabled={
-                    !createFactorForm.factor_id ||
                     !createFactorForm.name ||
                     !createFactorForm.display_name
                   }

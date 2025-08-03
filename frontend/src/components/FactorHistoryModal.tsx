@@ -17,12 +17,14 @@ const FactorHistoryModal: React.FC<FactorHistoryModalProps> = ({
 
   // 加载公式历史
   const loadFormulaHistory = async () => {
+    if (!isOpen || !factor) return;
+    
     try {
       setLoading(true);
-      const response = await factorApi.getFormulaHistory(factor.factor_id);
-      setFormulaHistory(response.history || []);
+      const response = await factorApi.getFactorHistory(factor.id);
+      setFormulaHistory(response.data?.history || []);
     } catch (error) {
-      console.error('获取公式历史失败:', error);
+      console.error('加载公式历史失败:', error);
     } finally {
       setLoading(false);
     }
@@ -32,7 +34,7 @@ const FactorHistoryModal: React.FC<FactorHistoryModalProps> = ({
     if (isOpen) {
       loadFormulaHistory();
     }
-  }, [isOpen, factor.factor_id]);
+  }, [isOpen, factor]);
 
   if (!isOpen) return null;
 
@@ -59,7 +61,7 @@ const FactorHistoryModal: React.FC<FactorHistoryModalProps> = ({
                 <div key={index} className="bg-base-200 p-4 rounded-lg">
                   <div className="flex justify-between items-start mb-2">
                     <div className="text-sm text-base-content/70">
-                      {new Date(entry.timestamp).toLocaleString('zh-CN')}
+                      {new Date(entry.timestamp || entry.created_at).toLocaleString('zh-CN')}
                     </div>
                     <div className="badge badge-outline badge-sm">
                       第 {formulaHistory.length - index} 次修改
@@ -70,14 +72,14 @@ const FactorHistoryModal: React.FC<FactorHistoryModalProps> = ({
                     <div>
                       <div className="text-xs font-medium text-red-600 mb-1">修改前：</div>
                       <code className="block bg-red-50 dark:bg-red-900/20 p-2 rounded text-xs">
-                        {entry.old_formula || '(空)'}
+                        {entry.old_formula || entry.old_code || '(空)'}
                       </code>
                     </div>
                     
                     <div>
                       <div className="text-xs font-medium text-green-600 mb-1">修改后：</div>
                       <code className="block bg-green-50 dark:bg-green-900/20 p-2 rounded text-xs">
-                        {entry.new_formula}
+                        {entry.new_formula || entry.new_code}
                       </code>
                     </div>
 

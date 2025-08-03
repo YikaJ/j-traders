@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Editor from '@monaco-editor/react';
-import { factorApi, CustomFactorCreateRequest } from '../services/api';
+import { factorApi, Factor, FactorCreate } from '../services/api';
 
 interface FactorCreateModalProps {
   isOpen: boolean;
@@ -14,37 +14,45 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
   onCreated
 }) => {
   const [createFactorForm, setCreateFactorForm] = useState({
-    factor_id: '',
+    id: '',
     name: '',
     display_name: '',
     description: '',
     category: 'custom',
-    formula: '',
-    input_fields: ['close'],
+    code: '',
+    input_fields: ['close', 'high', 'low', 'volume'],
     default_parameters: {},
-    calculation_method: 'formula'
+    parameter_schema: {},
+    calculation_method: 'custom',
+    is_active: true,
+    is_builtin: false,
+    version: '1.0.0'
   });
   const [isCreating, setIsCreating] = useState(false);
 
   // 保存新因子
   const handleSaveNewFactor = async () => {
-    if (!createFactorForm.factor_id || !createFactorForm.name || !createFactorForm.formula) {
-      alert('请填写因子ID、名称和代码');
+    if (!createFactorForm.id || !createFactorForm.name || !createFactorForm.code) {
+      alert('请填写所有必填字段');
       return;
     }
     
     try {
       setIsCreating(true);
-      const factorData: CustomFactorCreateRequest = {
-        factor_id: createFactorForm.factor_id,
+      const factorData: FactorCreate = {
+        id: createFactorForm.id,
         name: createFactorForm.name,
         display_name: createFactorForm.display_name,
         description: createFactorForm.description,
         category: createFactorForm.category,
-        formula: createFactorForm.formula,
+        code: createFactorForm.code,
         input_fields: createFactorForm.input_fields,
         default_parameters: createFactorForm.default_parameters,
-        calculation_method: createFactorForm.calculation_method
+        parameter_schema: createFactorForm.parameter_schema,
+        calculation_method: createFactorForm.calculation_method,
+        is_active: createFactorForm.is_active,
+        is_builtin: createFactorForm.is_builtin,
+        version: createFactorForm.version
       };
       
       await factorApi.createFactor(factorData);
@@ -62,39 +70,42 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
   // 重置表单
   const handleResetForm = () => {
     setCreateFactorForm({
-      factor_id: '',
+      id: '',
       name: '',
       display_name: '',
       description: '',
       category: 'custom',
-      formula: '',
-      input_fields: ['close'],
+      code: '',
+      input_fields: ['close', 'high', 'low', 'volume'],
       default_parameters: {},
-      calculation_method: 'formula'
+      parameter_schema: {},
+      calculation_method: 'custom',
+      is_active: true,
+      is_builtin: false,
+      version: '1.0.0'
     });
   };
 
   // 生成默认代码模板
   const generateDefaultCode = () => {
-    const factorId = createFactorForm.factor_id || 'custom_factor';
-    return `def calculate_${factorId}(data):
+    const factorId = createFactorForm.id || 'custom_factor';
+    return `import numpy as np
+import pandas as pd
+
+def calculate_${factorId}(data):
     """
-    ${createFactorForm.description || '自定义因子计算函数'}
+    自定义因子计算函数
     """
-    import pandas as pd
-    import numpy as np
+    # 获取价格数据
+    close = data['close']
+    high = data['high']
+    low = data['low']
+    volume = data['volume']
     
-    # 在这里编写你的因子计算逻辑
-    # data参数包含股票的历史数据
-    # 可用的数据字段：data['close'], data['high'], data['low'], data['volume']
+    # 计算因子值（示例：价格动量）
+    result = close.pct_change(periods=5)
     
-    # 示例：计算价格变化率
-    returns = data['close'].pct_change()
-    
-    # 计算过去10天的累积收益
-    momentum = returns.rolling(window=10).sum()
-    
-    return momentum`;
+    return result`;
   };
 
   if (!isOpen) return null;
@@ -117,10 +128,10 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
                 type="text"
                 className="input input-bordered"
                 placeholder="例如: custom_001"
-                value={createFactorForm.factor_id}
+                value={createFactorForm.id}
                 onChange={(e) => setCreateFactorForm({
                   ...createFactorForm,
-                  factor_id: e.target.value
+                  id: e.target.value
                 })}
               />
             </div>
@@ -224,7 +235,7 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
                 className="btn btn-xs btn-ghost"
                 onClick={() => setCreateFactorForm({
                   ...createFactorForm,
-                  formula: generateDefaultCode()
+                  code: generateDefaultCode()
                 })}
               >
                 生成模板
@@ -234,10 +245,10 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
               <Editor
                 height="400px"
                 defaultLanguage="python"
-                value={createFactorForm.formula}
+                value={createFactorForm.code}
                 onChange={(value) => setCreateFactorForm({
                   ...createFactorForm,
-                  formula: value || ''
+                  code: value || ''
                 })}
                 options={{
                   readOnly: false,
@@ -272,14 +283,13 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
           <div className="bg-base-200 p-4 rounded-lg">
             <h4 className="font-semibold mb-2">代码编写帮助</h4>
             <div className="text-xs space-y-1">
-              <div><code>def calculate_{createFactorForm.factor_id || 'custom_factor'}(data):</code> - 函数定义</div>
-              <div><code>import pandas as pd</code> - 导入pandas</div>
               <div><code>import numpy as np</code> - 导入numpy</div>
+              <div><code>import pandas as pd</code> - 导入pandas</div>
               <div><code>data['close']</code> - 收盘价数据</div>
               <div><code>data['high']</code> - 最高价数据</div>
               <div><code>data['low']</code> - 最低价数据</div>
               <div><code>data['volume']</code> - 成交量数据</div>
-              <div><code>.pct_change()</code> - 计算收益率</div>
+              <div><code>.pct_change(periods=5)</code> - 计算5日收益率</div>
               <div><code>.rolling(window=20).mean()</code> - 20日移动平均</div>
               <div><code>.rolling(window=20).std()</code> - 20日标准差</div>
               <div><code>return result</code> - 返回计算结果</div>

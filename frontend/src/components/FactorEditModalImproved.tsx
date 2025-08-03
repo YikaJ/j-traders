@@ -61,6 +61,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
   const handleValidateFormula = async () => {
     if (!editingFormula.trim()) {
       setFormulaValidation({
+        id: factor.id,
         is_valid: false,
         errors: ['公式不能为空'],
         warnings: []
@@ -75,6 +76,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
     } catch (error) {
       console.error('验证公式失败:', error);
       setFormulaValidation({
+        id: factor.id,
         is_valid: false,
         errors: ['验证失败，请检查网络连接'],
         warnings: []
@@ -101,7 +103,7 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
       
       // 构建更新数据
       const update: FactorFormulaUpdate & { input_fields?: string[] } = {
-        formula: editingFormula,
+        code: editingFormula,
         description: editingDescription || undefined
       };
       

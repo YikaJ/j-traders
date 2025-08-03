@@ -46,17 +46,134 @@ export interface MarketIndex {
 
 // 因子相关接口（统一）
 export interface Factor {
-  id: number;
+  id: string;
   name: string;
-  description: string;
+  display_name: string;
+  description?: string;
   category: string;
   code: string;
-  isActive: boolean;
-  version: string;
-  usageCount: number;
-  lastUsedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  input_fields?: string[];
+  default_parameters?: Record<string, any>;
+  parameter_schema?: Record<string, any>;
+  calculation_method?: string;
+  is_active?: boolean;
+  is_builtin?: boolean;
+  usage_count?: number;
+  last_used_at?: string;
+  created_at?: string;
+  updated_at?: string;
+  version?: string;
+}
+
+export interface FactorCreate {
+  id?: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  category: string;
+  code: string;
+  input_fields?: string[];
+  default_parameters?: Record<string, any>;
+  parameter_schema?: Record<string, any>;
+  calculation_method?: string;
+  is_active?: boolean;
+  is_builtin?: boolean;
+  version?: string;
+}
+
+export interface FactorUpdate {
+  name?: string;
+  display_name?: string;
+  description?: string;
+  category?: string;
+  code?: string;
+  input_fields?: string[];
+  default_parameters?: Record<string, any>;
+  parameter_schema?: Record<string, any>;
+  calculation_method?: string;
+  is_active?: boolean;
+  is_builtin?: boolean;
+  version?: string;
+}
+
+export interface FactorTestRequest {
+  id: string;
+  code: string;
+  input_fields?: string[];
+  parameters?: Record<string, any>;
+  data?: Record<string, any>;
+}
+
+export interface FactorTestResult {
+  is_valid: boolean;
+  errors?: string[];
+  warnings?: string[];
+  result?: any;
+}
+
+export interface FactorTestResponse {
+  id: string;
+  is_valid: boolean;
+  errors?: string[];
+  warnings?: string[];
+  result?: any;
+}
+
+export interface FactorValidationResult {
+  id: string;
+  is_valid: boolean;
+  errors?: string[];
+  warnings?: string[];
+}
+
+export interface FactorFormulaUpdate {
+  code: string;
+  description?: string;
+}
+
+export interface FactorFormulaResponse {
+  id: string;
+  code: string;
+}
+
+export interface FormulaValidationResult {
+  id: string;
+  is_valid: boolean;
+  errors?: string[];
+  warnings?: string[];
+}
+
+export interface CustomFactorCreateRequest {
+  factor_id: string;
+  name: string;
+  display_name: string;
+  description: string;
+  category: string;
+  formula: string;
+  input_fields: string[];
+  default_parameters: Record<string, any>;
+  calculation_method: string;
+}
+
+export interface FormulaHistoryEntry {
+  id: string;
+  old_code: string;
+  new_code: string;
+  old_formula?: string; // 兼容旧版本
+  new_formula?: string; // 兼容旧版本
+  changed_by?: string;
+  change_reason?: string;
+  created_at: string;
+  timestamp?: string; // 兼容旧版本
+  description_change?: {
+    old: string;
+    new: string;
+  };
+}
+
+export interface FactorHistoryResponse {
+  id: string;
+  history: FormulaHistoryEntry[];
 }
 
 export interface FactorParameters {
@@ -64,11 +181,15 @@ export interface FactorParameters {
 }
 
 export interface SelectedFactor {
-  factor_id: string;
-  name?: string;
-  weight?: number;
-  is_enabled?: boolean;
-  parameters?: FactorParameters;
+  id: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  category: string;
+  code: string;
+  weight: number;
+  is_enabled: boolean;
+  parameters?: Record<string, any>;
 }
 
 // 策略配置相关接口
@@ -191,70 +312,7 @@ export interface WeightOptimizationResult {
   analysis_details: Record<string, any>;
 }
 
-export interface FactorFormulaUpdate {
-  formula: string;
-  description?: string;
-}
 
-export interface FactorFormulaResponse {
-  factor_id: string;
-  formula: string;
-  description: string;
-  updated_at: string;
-  success: boolean;
-}
-
-export interface FormulaValidationResult {
-  is_valid: boolean;
-  errors: string[];
-  warnings: string[];
-}
-
-export interface FormulaHistoryEntry {
-  timestamp: string;
-  old_formula: string;
-  new_formula: string;
-  description_change: {
-    old: string;
-    new: string;
-  };
-}
-
-// 自定义因子相关接口
-export interface CustomFactorCreateRequest {
-  factor_id: string;
-  name: string;
-  display_name: string;
-  description: string;
-  category: string;
-  formula: string;
-  input_fields: string[];
-  default_parameters: Record<string, any>;
-  calculation_method: string;
-}
-
-export interface CustomFactorUpdateRequest {
-  name?: string;
-  display_name?: string;
-  description?: string;
-  category?: string;
-  formula?: string;
-  input_fields?: string[];
-  default_parameters?: Record<string, any>;
-  calculation_method?: string;
-}
-
-export interface CustomFactorResponse {
-  factor_id: string;
-  name: string;
-  display_name: string;
-  description: string;
-  category: string;
-  formula: string;
-  input_fields: string[];
-  default_parameters: Record<string, any>;
-  calculation_method: string;
-}
 
 // ====== API 接口 ======
 
@@ -326,6 +384,11 @@ export const factorApi = {
   getFormulaHistory: async (factorId: string) => {
     return api.get(`/factors/${factorId}/formula-history`);
   },
+  
+  // 获取因子历史
+  getFactorHistory: async (factorId: string) => {
+    return api.get(`/factors/${factorId}/history`);
+  },
 
   // 验证因子公式
   validateFactorFormula: async (factorId: string, formula: string): Promise<FormulaValidationResult> => {
@@ -338,8 +401,8 @@ export const factorApi = {
   },
 
   // 重置因子公式
-  resetFactorFormula: async (factorId: string): Promise<{ success: boolean; message: string }> => {
-    return api.post(`/factors/${factorId}/reset-formula`);
+  resetFactorFormula: async (factorId: string) => {
+    return api.post<{ success: boolean; message: string }>(`/factors/${factorId}/reset-formula`);
   },
 };
 
@@ -355,12 +418,12 @@ export const strategyConfigApi = {
     sort_by?: string;
     sort_order?: string;
   }) => {
-    return api.get('/strategy-configs/', { params });
+    return api.get<{ items: StrategyConfig[]; total: number }>('/strategy-configs/', { params });
   },
 
   // 获取指定策略配置
-  getStrategyConfig: async (configId: string): Promise<StrategyConfig> => {
-    return api.get(`/strategy-configs/${configId}`);
+  getStrategyConfig: async (configId: string) => {
+    return api.get<StrategyConfig>(`/strategy-configs/${configId}`);
   },
 
   // 创建策略配置
@@ -371,14 +434,14 @@ export const strategyConfigApi = {
     filters?: Record<string, any>;
     max_results?: number;
     tags?: string[];
-  }, createdBy?: string): Promise<StrategyConfig> => {
+  }, createdBy?: string) => {
     const params = createdBy ? { created_by: createdBy } : {};
-    return api.post('/strategy-configs/', strategyData, { params });
+    return api.post<StrategyConfig>('/strategy-configs/', strategyData, { params });
   },
 
   // 更新策略配置
-  updateStrategyConfig: async (configId: string, strategyData: Partial<StrategyConfig>): Promise<StrategyConfig> => {
-    return api.put(`/strategy-configs/${configId}`, strategyData);
+  updateStrategyConfig: async (configId: string, strategyData: Partial<StrategyConfig>) => {
+    return api.put<StrategyConfig>(`/strategy-configs/${configId}`, strategyData);
   },
 
   // 删除策略配置
@@ -388,7 +451,7 @@ export const strategyConfigApi = {
 
   // 复制策略配置
   duplicateStrategyConfig: async (configId: string, newName?: string, createdBy?: string) => {
-    return api.post(`/strategy-configs/${configId}/duplicate`, {
+    return api.post<StrategyConfig>(`/strategy-configs/${configId}/duplicate`, {
       new_name: newName,
       created_by: createdBy
     });
@@ -451,21 +514,21 @@ export const weightApi = {
   },
 
   // 获取权重预设
-  getWeightPresets: async (): Promise<WeightPreset[]> => {
-    return api.get('/strategy-configs/weights/presets');
+  getWeightPresets: async () => {
+    return api.get<WeightPreset[]>('/strategy-configs/weights/presets');
   },
 
   // 应用权重预设
   applyWeightPreset: async (factors: SelectedFactor[], presetId: string) => {
-    return api.post('/strategy-configs/weights/apply-preset', {
+    return api.post<{ factors: SelectedFactor[] }>('/strategy-configs/weights/apply-preset', {
       factors,
       preset_id: presetId
     });
   },
 
   // 优化权重
-  optimizeWeights: async (factors: SelectedFactor[], optimizationMethod: string = 'correlation_adjusted'): Promise<WeightOptimizationResult> => {
-    return api.post('/strategy-configs/weights/optimize', {
+  optimizeWeights: async (factors: SelectedFactor[], optimizationMethod: string = 'correlation_adjusted') => {
+    return api.post<WeightOptimizationResult>('/strategy-configs/weights/optimize', {
       factors,
       optimization_method: optimizationMethod
     });
@@ -480,19 +543,19 @@ export const weightApi = {
 // 策略模板和向导API
 export const templateApi = {
   // 获取策略模板列表
-  getStrategyTemplates: async (category?: string): Promise<StrategyTemplate[]> => {
+  getStrategyTemplates: async (category?: string) => {
     const params = category ? { category } : {};
-    return api.get('/strategy-templates/', { params });
+    return api.get<StrategyTemplate[]>('/strategy-templates/', { params });
   },
 
   // 获取指定模板详情
-  getStrategyTemplate: async (templateId: string): Promise<StrategyTemplate> => {
-    return api.get(`/strategy-templates/${templateId}`);
+  getStrategyTemplate: async (templateId: string) => {
+    return api.get<StrategyTemplate>(`/strategy-templates/${templateId}`);
   },
 
   // 应用策略模板
   applyTemplate: async (templateId: string, customizations?: any, strategyName?: string, createdBy?: string) => {
-    return api.post(`/strategy-templates/${templateId}/apply`, {
+    return api.post<StrategyConfig>(`/strategy-templates/${templateId}/apply`, {
       template_id: templateId,
       customizations,
       strategy_name: strategyName,
@@ -825,7 +888,6 @@ export const dataFieldApi = {
 // 策略管理相关接口
 export interface StrategyFactor {
   factor_id: string;
-  factor_name: string;
   weight: number;
   is_enabled: boolean;
 }

@@ -65,24 +65,42 @@ class StrategyExecution(Base):
     
     # 执行信息
     execution_date = Column(String(10), nullable=False, comment="执行日期（YYYY-MM-DD）")
-    execution_time = Column(Float, comment="执行耗时（秒）")
-    stock_count = Column(Integer, comment="选中股票数量")
-    is_dry_run = Column(Boolean, default=False, comment="是否为模拟执行")
+    start_time = Column(DateTime, nullable=False, comment="开始时间")
+    end_time = Column(DateTime, comment="结束时间")
+    total_time = Column(Float, comment="总耗时（秒）")
     
     # 执行状态
-    status = Column(String(20), nullable=False, comment="执行状态：success, failed, timeout")
+    status = Column(String(20), nullable=False, default="pending", comment="执行状态")
+    current_stage = Column(String(50), comment="当前阶段")
+    overall_progress = Column(Float, default=0.0, comment="总体进度")
+    
+    # 股票筛选条件
+    stock_filter = Column(JSON, comment="股票筛选条件")
+    is_dry_run = Column(Boolean, default=False, comment="是否为模拟执行")
+    
+    # 执行统计
+    initial_stock_count = Column(Integer, comment="初始股票数量")
+    filtered_stock_count = Column(Integer, comment="筛选后股票数量")
+    final_stock_count = Column(Integer, comment="最终选中股票数量")
+    
+    # 执行摘要
+    data_fetch_summary = Column(JSON, comment="数据获取摘要")
+    factor_summaries = Column(JSON, comment="因子计算摘要")
+    stages = Column(JSON, comment="各阶段进度")
+    
+    # 错误信息
     error_message = Column(Text, comment="错误信息")
+    
+    # 执行日志
+    logs = Column(JSON, comment="执行日志")
     
     # 执行结果 - 存储为JSON
     selected_stocks = Column(JSON, comment="选中的股票列表")
     factor_performance = Column(JSON, comment="因子表现统计")
-    execution_log = Column(JSON, comment="执行日志")
-    
-    # 是否保存结果
-    is_saved = Column(Boolean, default=True, comment="是否保存结果")
     
     # 时间字段
-    created_at = Column(DateTime, server_default=func.now(), comment="执行时间")
+    created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
     
     # 关联关系
     strategy = relationship("Strategy", back_populates="executions")

@@ -42,9 +42,9 @@ const FactorDetailModal: React.FC<FactorDetailModalProps> = ({
     return categoryMap[category] || category;
   };
 
-  // 获取因子代码（优先使用formula字段，如果没有则使用code字段）
+  // 获取因子代码（优先使用code字段）
   const getFactorCode = () => {
-    return factor.formula || factor.code || '暂无代码';
+    return factor.code || '暂无代码';
   };
 
   return (
@@ -61,7 +61,7 @@ const FactorDetailModal: React.FC<FactorDetailModalProps> = ({
               <label className="label">
                 <span className="label-text font-semibold">因子ID</span>
               </label>
-              <div className="text-sm">{factor.factor_id}</div>
+              <div className="text-sm">{factor.id}</div>
             </div>
             <div>
               <label className="label">

@@ -66,17 +66,23 @@ async def get_factors(
         result = []
         for factor in paginated_factors:
             result.append(FactorResponse(
-                id=factor.get('id', 0),
+                id=factor.get('id', ''),
                 name=factor.get('name', ''),
+                display_name=factor.get('display_name', ''),
                 description=factor.get('description', ''),
                 category=factor.get('category', ''),
-                code=factor.get('formula', ''),
-                isActive=factor.get('is_active', True),
-                version=factor.get('version', '1.0'),
-                usageCount=factor.get('usage_count', 0),
-                lastUsedAt=factor.get('last_used_at'),
-                createdAt=factor.get('created_at'),
-                updatedAt=factor.get('updated_at')
+                code=factor.get('code', ''),
+                input_fields=factor.get('input_fields', []),
+                default_parameters=factor.get('default_parameters', {}),
+                parameter_schema=factor.get('parameter_schema'),
+                calculation_method=factor.get('calculation_method', 'custom'),
+                is_active=factor.get('is_active', True),
+                is_builtin=factor.get('is_builtin', False),
+                usage_count=factor.get('usage_count', 0),
+                last_used_at=factor.get('last_used_at'),
+                created_at=factor.get('created_at'),
+                updated_at=factor.get('updated_at'),
+                version=factor.get('version', '1.0.0')
             ))
         
         return result
@@ -86,38 +92,37 @@ async def get_factors(
         raise HTTPException(status_code=500, detail="获取因子列表失败")
 
 
-@router.get("/{factor_id}", response_model=FactorResponse)
+@router.get("/{id}", response_model=FactorResponse)
 async def get_factor(
-    factor_id: str,
+    id: str,
     db: Session = Depends(get_db)
 ):
     """
-    获取单个因子详情
-    
-    Args:
-        factor_id: 因子ID
-        db: 数据库会话
-    
-    Returns:
-        因子详情
+    根据ID获取因子详情
     """
     try:
-        factor_info = unified_factor_service.get_factor_by_id(factor_id, db)
+        factor_info = unified_factor_service.get_factor_by_id(id, db)
         if not factor_info:
             raise HTTPException(status_code=404, detail="因子不存在")
         
         return FactorResponse(
-            id=factor_info.get('id', 0),
+            id=factor_info.get('id', ''),
             name=factor_info.get('name', ''),
+            display_name=factor_info.get('display_name', ''),
             description=factor_info.get('description', ''),
             category=factor_info.get('category', ''),
-            code=factor_info.get('formula', ''),
-            isActive=factor_info.get('is_active', True),
-            version=factor_info.get('version', '1.0'),
-            usageCount=factor_info.get('usage_count', 0),
-            lastUsedAt=factor_info.get('last_used_at'),
-            createdAt=factor_info.get('created_at'),
-            updatedAt=factor_info.get('updated_at')
+            code=factor_info.get('code', ''),
+            input_fields=factor_info.get('input_fields', []),
+            default_parameters=factor_info.get('default_parameters', {}),
+            parameter_schema=factor_info.get('parameter_schema'),
+            calculation_method=factor_info.get('calculation_method', 'custom'),
+            is_active=factor_info.get('is_active', True),
+            is_builtin=factor_info.get('is_builtin', False),
+            usage_count=factor_info.get('usage_count', 0),
+            last_used_at=factor_info.get('last_used_at'),
+            created_at=factor_info.get('created_at'),
+            updated_at=factor_info.get('updated_at'),
+            version=factor_info.get('version', '1.0.0')
         )
     
     except HTTPException:
@@ -134,176 +139,83 @@ async def create_factor(
 ):
     """
     创建新因子
-    
-    Args:
-        factor_data: 因子创建数据
-        db: 数据库会话
-    
-    Returns:
-        创建的因子
     """
     try:
-        # 转换为统一因子服务格式
-        factor_info = {
-            'factor_id': factor_data.name.lower().replace(' ', '_'),
-            'name': factor_data.name,
-            'display_name': factor_data.name,
-            'description': factor_data.description or '',
-            'category': factor_data.category or 'custom',
-            'formula': factor_data.code,
-            'input_fields': ['close', 'high', 'low', 'volume'],
-            'default_parameters': {},
-            'parameter_schema': {},
-            'calculation_method': 'custom',
-            'is_active': True,
-            'is_builtin': False,
-            'version': '1.0.0'
-        }
+        # 处理前端发送的数据格式
+        factor_data_dict = factor_data.dict()
         
-        created_factor = unified_factor_service.create_factor(factor_info, db)
-        if not created_factor:
-            raise HTTPException(status_code=400, detail="创建因子失败")
+        # 如果前端发送的是formula，需要映射到code字段
+        if 'formula' in factor_data_dict and 'code' not in factor_data_dict:
+            factor_data_dict['code'] = factor_data_dict['formula']
         
-        return FactorResponse(
-            id=created_factor.get('id', 0),
-            name=created_factor.get('name', ''),
-            description=created_factor.get('description', ''),
-            category=created_factor.get('category', ''),
-            code=created_factor.get('formula', ''),
-            isActive=created_factor.get('is_active', True),
-            version=created_factor.get('version', '1.0'),
-            usageCount=created_factor.get('usage_count', 0),
-            lastUsedAt=created_factor.get('last_used_at'),
-            createdAt=created_factor.get('created_at'),
-            updatedAt=created_factor.get('updated_at')
-        )
-    
-    except HTTPException:
-        raise
+        # 移除因子ID相关字段，让后端自动生成
+        factor_data_dict.pop('id', None)
+        factor_data_dict.pop('factor_id', None)
+        
+        created_factor = unified_factor_service.create_factor(factor_data_dict, db)
+        return created_factor
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"创建因子失败: {e}")
-        raise HTTPException(status_code=500, detail="创建因子失败")
+        raise HTTPException(status_code=500, detail=f"创建因子失败: {str(e)}")
 
 
-@router.put("/{factor_id}", response_model=FactorResponse)
+@router.put("/{id}", response_model=FactorResponse)
 async def update_factor(
-    factor_id: str,
+    id: str,
     factor_data: FactorUpdate,
     db: Session = Depends(get_db)
 ):
     """
-    更新因子
-    
-    Args:
-        factor_id: 因子ID
-        factor_data: 因子更新数据
-        db: 数据库会话
-    
-    Returns:
-        更新后的因子
+    更新因子信息
     """
     try:
-        # 构建更新数据
-        update_data = {}
-        if factor_data.name is not None:
-            update_data['name'] = factor_data.name
-            update_data['display_name'] = factor_data.name
+        update_data = factor_data.dict(exclude_unset=True)
+        if 'code' in update_data:
+            update_data['code'] = factor_data.code
         
-        if factor_data.description is not None:
-            update_data['description'] = factor_data.description
-        
-        if factor_data.category is not None:
-            update_data['category'] = factor_data.category
-        
-        if factor_data.code is not None:
-            update_data['formula'] = factor_data.code
-        
-        # 更新因子
-        updated_factor = unified_factor_service.update_factor(factor_id, update_data, db)
-        if not updated_factor:
-            raise HTTPException(status_code=404, detail="因子不存在")
-        
-        return FactorResponse(
-            id=updated_factor.get('id', 0),
-            name=updated_factor.get('name', ''),
-            description=updated_factor.get('description', ''),
-            category=updated_factor.get('category', ''),
-            code=updated_factor.get('formula', ''),
-            isActive=updated_factor.get('is_active', True),
-            version=updated_factor.get('version', '1.0'),
-            usageCount=updated_factor.get('usage_count', 0),
-            lastUsedAt=updated_factor.get('last_used_at'),
-            createdAt=updated_factor.get('created_at'),
-            updatedAt=updated_factor.get('updated_at')
-        )
-    
-    except HTTPException:
-        raise
+        updated_factor = unified_factor_service.update_factor(id, update_data, db)
+        return updated_factor
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"更新因子失败: {e}")
-        raise HTTPException(status_code=500, detail="更新因子失败")
+        raise HTTPException(status_code=500, detail=f"更新因子失败: {str(e)}")
 
 
-@router.delete("/{factor_id}")
+@router.delete("/{id}")
 async def delete_factor(
-    factor_id: str,
+    id: str,
     db: Session = Depends(get_db)
 ):
     """
     删除因子
-    
-    Args:
-        factor_id: 因子ID
-        db: 数据库会话
-    
-    Returns:
-        删除结果
     """
     try:
-        success = unified_factor_service.delete_factor(factor_id, db)
-        if not success:
+        success = unified_factor_service.delete_factor(id, db)
+        if success:
+            return {"message": "因子删除成功"}
+        else:
             raise HTTPException(status_code=404, detail="因子不存在")
-        
-        return {"message": "因子删除成功"}
-    
-    except HTTPException:
-        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"删除因子失败: {e}")
-        raise HTTPException(status_code=500, detail="删除因子失败")
+        raise HTTPException(status_code=500, detail=f"删除因子失败: {str(e)}")
 
 
-@router.post("/{factor_id}/test", response_model=FactorTestResponse)
+@router.post("/{id}/test", response_model=FactorTestResponse)
 async def test_factor(
-    factor_id: str,
+    id: str,
     test_request: FactorTestRequest,
     db: Session = Depends(get_db)
 ):
     """
-    测试因子
-    
-    Args:
-        factor_id: 因子ID
-        test_request: 测试请求
-        db: 数据库会话
-    
-    Returns:
-        测试结果
+    测试因子代码
     """
     try:
-        # 这里可以添加因子测试逻辑
-        # 目前返回模拟结果
-        return FactorTestResponse(
-            success=True,
-            message="因子测试成功",
-            executionTime=0.1,
-            results=[],
-            statistics={}
-        )
-    
+        result = unified_factor_service.test_factor(id, test_request.dict(), db)
+        return result
     except Exception as e:
-        logger.error(f"测试因子失败: {e}")
-        raise HTTPException(status_code=500, detail="测试因子失败")
+        raise HTTPException(status_code=500, detail=f"测试因子失败: {str(e)}")
 
 
 @router.get("/categories/", response_model=List[str])

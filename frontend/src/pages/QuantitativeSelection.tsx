@@ -22,10 +22,7 @@ const QuantitativeSelection: React.FC = () => {
   // 主要状态
   const [activeTab, setActiveTab] = useState<'factor-library' | 'weight-config' | 'factor-analysis'>('factor-library');
   const [selectedFactors, setSelectedFactors] = useState<SelectedFactor[]>([]);
-  const [weightPresets, setWeightPresets] = useState<WeightPreset[]>([]);
-
-  // UI状态
-  const [loading, setLoading] = useState(false);
+  const [, setWeightPresets] = useState<WeightPreset[]>([]);
 
   // 消息状态
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', text: string } | null>(null);
@@ -37,7 +34,7 @@ const QuantitativeSelection: React.FC = () => {
 
   const loadInitialData = async () => {
     try {
-      const presets = await weightApi.getWeightPresets();
+      const {data: presets} = await weightApi.getWeightPresets();
       setWeightPresets(presets);
     } catch (error) {
       console.error('加载初始数据失败:', error);
@@ -53,7 +50,7 @@ const QuantitativeSelection: React.FC = () => {
   // 处理因子选择
   const handleFactorSelect = (factor: SelectedFactor) => {
     // 检查是否已存在
-    const exists = selectedFactors.some(f => f.factor_id === factor.factor_id);
+    const exists = selectedFactors.some(f => f.id === factor.id);
     if (exists) {
       showMessage('warning', '该因子已经添加过了');
       return;
@@ -79,7 +76,7 @@ const QuantitativeSelection: React.FC = () => {
 
   // 移除因子
   const handleRemoveFactor = (factorId: string) => {
-    const updatedFactors = selectedFactors.filter(f => f.factor_id !== factorId);
+    const updatedFactors = selectedFactors.filter(f => f.id !== factorId);
     
     // 重新分配权重
     const enabledCount = updatedFactors.filter(f => f.is_enabled).length;
@@ -99,14 +96,14 @@ const QuantitativeSelection: React.FC = () => {
   // 更新因子权重
   const handleFactorWeightChange = (factorId: string, weight: number) => {
     setSelectedFactors(selectedFactors.map(factor =>
-      factor.factor_id === factorId ? { ...factor, weight } : factor
+      factor.id === factorId ? { ...factor, weight } : factor
     ));
   };
 
   // 切换因子启用状态
   const handleFactorToggle = (factorId: string) => {
     setSelectedFactors(selectedFactors.map(factor =>
-      factor.factor_id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
+      factor.id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
     ));
   };
 

@@ -28,6 +28,7 @@ from app.db.models.stock import Stock, StockDaily
 from app.services.tushare_service import tushare_service
 from app.services.unified_factor_service import unified_factor_service
 from app.services.cache_service import cache_service
+from app.services.enhanced_data_fetcher import enhanced_data_fetcher, RateLimitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -127,127 +128,44 @@ class ProgressTracker:
 
 
 class DataFetcher:
-    """数据获取器"""
+    """数据获取器（包装增强数据获取器）"""
     
-    def __init__(self, execution_id: str, logger: ExecutionLogger, enable_cache: bool = True):
+    def __init__(self, execution_id: str, logger: ExecutionLogger, enable_cache: bool = True, 
+                 rate_limit_config: Optional[RateLimitConfig] = None):
         self.execution_id = execution_id
         self.logger = logger
         self.enable_cache = enable_cache
-        self.cache_hits = 0
-        self.api_calls = 0
-        self.total_data_size = 0
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.enhanced_fetcher = enhanced_data_fetcher
+        
+        # 如果提供了频率限制配置，创建新的增强获取器实例
+        if rate_limit_config:
+            from app.services.enhanced_data_fetcher import EnhancedDataFetcher
+            self.enhanced_fetcher = EnhancedDataFetcher(rate_limit_config)
+    
+    async def fetch_strategy_data(self, strategy: Any, stock_codes: List[str], 
+                                 execution_date: str) -> Tuple[pd.DataFrame, DataFetchSummary]:
+        """根据策略需求智能获取数据"""
+        return await self.enhanced_fetcher.fetch_strategy_data(
+            strategy, stock_codes, execution_date, self.logger
+        )
     
     async def fetch_stock_data(self, stock_codes: List[str], required_fields: List[str], 
                               trade_date: str) -> Tuple[pd.DataFrame, DataFetchSummary]:
-        """获取股票数据"""
-        start_time = time.time()
-        total_stocks = len(stock_codes)
-        fetched_data = []
-        failed_stocks = []
+        """传统的股票数据获取（向后兼容）"""
+        # 创建一个虚拟策略对象来包装字段需求
+        class MockStrategy:
+            def __init__(self, fields):
+                self.factors = [MockFactor(fields)]
         
-        self.logger.log(LogLevel.INFO, "data_fetching", 
-                       f"开始获取{total_stocks}只股票的数据，字段: {', '.join(required_fields)}")
+        class MockFactor:
+            def __init__(self, fields):
+                self.is_enabled = True
+                self.factor_id = "legacy_fetch"
+                # 构造简单的因子代码来表示所需字段
+                self.factor_code = f"def calculate(data):\n    return data[{fields}].sum()"
         
-        # 分批处理，避免API限制
-        batch_size = 100
-        batches = [stock_codes[i:i + batch_size] for i in range(0, len(stock_codes), batch_size)]
-        
-        for i, batch in enumerate(batches):
-            try:
-                self.logger.log(LogLevel.INFO, "data_fetching", 
-                               f"处理第{i+1}/{len(batches)}批股票 ({len(batch)}只)")
-                
-                # 尝试从缓存获取
-                cache_key = f"stock_data_{trade_date}_{hash(tuple(sorted(required_fields)))}"
-                cached_data = None
-                
-                if self.enable_cache:
-                    cached_data = await cache_service.get(cache_key)
-                    if cached_data:
-                        self.cache_hits += len(batch)
-                
-                if cached_data is None:
-                    # 从Tushare获取数据
-                    batch_data = await self._fetch_from_tushare(batch, required_fields, trade_date)
-                    self.api_calls += 1
-                    
-                    # 缓存数据
-                    if self.enable_cache and batch_data is not None:
-                        await cache_service.set(cache_key, batch_data, expire=3600)  # 缓存1小时
-                else:
-                    batch_data = cached_data
-                
-                if batch_data is not None and not batch_data.empty:
-                    fetched_data.append(batch_data)
-                    self.total_data_size += len(batch_data) * len(batch_data.columns) * 8  # 估算大小
-                else:
-                    failed_stocks.extend(batch)
-                
-                # 更新进度
-                progress = (i + 1) / len(batches) * 100
-                self.logger.log(LogLevel.INFO, "data_fetching", 
-                               f"数据获取进度: {progress:.1f}%", progress=progress)
-                
-                # 避免API限制
-                await asyncio.sleep(0.1)
-                
-            except Exception as e:
-                self.logger.log(LogLevel.ERROR, "data_fetching", 
-                               f"获取第{i+1}批数据失败: {str(e)}")
-                failed_stocks.extend(batch)
-        
-        # 合并数据
-        if fetched_data:
-            combined_data = pd.concat(fetched_data, ignore_index=True)
-        else:
-            combined_data = pd.DataFrame()
-        
-        fetch_time = time.time() - start_time
-        fetched_stocks = len(combined_data) if not combined_data.empty else 0
-        
-        summary = DataFetchSummary(
-            total_stocks=total_stocks,
-            fetched_stocks=fetched_stocks,
-            failed_stocks=len(failed_stocks),
-            cache_hits=self.cache_hits,
-            api_calls=self.api_calls,
-            data_size_mb=self.total_data_size / (1024 * 1024),
-            fetch_time=fetch_time
-        )
-        
-        self.logger.log(LogLevel.INFO, "data_fetching", 
-                       f"数据获取完成: 成功{fetched_stocks}只，失败{len(failed_stocks)}只，耗时{fetch_time:.2f}秒")
-        
-        return combined_data, summary
-    
-    async def _fetch_from_tushare(self, stock_codes: List[str], fields: List[str], 
-                                 trade_date: str) -> Optional[pd.DataFrame]:
-        """从Tushare获取数据"""
-        try:
-            # 这里应该调用具体的Tushare API
-            # 目前返回模拟数据
-            data = []
-            for code in stock_codes:
-                row = {'ts_code': code, 'trade_date': trade_date}
-                # 添加模拟的字段数据
-                for field in fields:
-                    if field in ['close', 'open', 'high', 'low']:
-                        row[field] = np.random.uniform(10, 100)
-                    elif field in ['vol', 'amount']:
-                        row[field] = np.random.uniform(1000, 100000)
-                    elif field in ['turnover_rate', 'pe', 'pb']:
-                        row[field] = np.random.uniform(0.1, 50)
-                    else:
-                        row[field] = np.random.uniform(-1, 1)
-                data.append(row)
-            
-            return pd.DataFrame(data)
-            
-        except Exception as e:
-            self.logger.log(LogLevel.ERROR, "data_fetching", 
-                           f"从Tushare获取数据失败: {str(e)}")
-            return None
+        mock_strategy = MockStrategy(required_fields)
+        return await self.fetch_strategy_data(mock_strategy, stock_codes, trade_date)
     
     async def get_stock_historical_data(self, symbol: str, end_date: str, db: Session,
                                       days: int = 252) -> pd.DataFrame:
@@ -323,32 +241,32 @@ class FactorCalculator:
             if not factor_config.is_enabled:
                 continue
                 
-            factor_id = factor_config.factor_id
+            id = factor_config.id
             self.logger.log(LogLevel.INFO, "factor_calculation", 
-                           f"计算因子 {factor_id} ({i+1}/{len(strategy.factors)})")
+                           f"计算因子 {id} ({i+1}/{len(strategy.factors)})")
             
             start_time = time.time()
             
             try:
                 # 获取因子定义
-                factor_def = unified_factor_service.get_factor_by_id(factor_id, db)
+                factor_def = unified_factor_service.get_factor_by_id(id, db)
                 if not factor_def:
                     self.logger.log(LogLevel.ERROR, "factor_calculation", 
-                                   f"因子 {factor_id} 定义不存在")
+                                   f"因子 {id} 定义不存在")
                     continue
                 
                 # 计算因子值
                 factor_values = await self._calculate_single_factor(factor_def, stock_data)
                 
                 if factor_values is not None and not factor_values.empty:
-                    factor_results[factor_id] = factor_values
+                    factor_results[id] = factor_values
                     
                     # 统计信息
                     calculation_time = time.time() - start_time
                     valid_values = factor_values.dropna()
                     
                     summary = FactorCalculationSummary(
-                        factor_id=factor_id,
+                        factor_id=id,
                         calculated_stocks=len(valid_values),
                         failed_stocks=len(factor_values) - len(valid_values),
                         calculation_time=calculation_time,
@@ -360,10 +278,10 @@ class FactorCalculator:
                     summaries.append(summary)
                     
                     self.logger.log(LogLevel.INFO, "factor_calculation", 
-                                   f"因子 {factor_id} 计算完成: {len(valid_values)}只股票，耗时{calculation_time:.2f}秒")
+                                   f"因子 {id} 计算完成: {len(valid_values)}只股票，耗时{calculation_time:.2f}秒")
                 else:
                     self.logger.log(LogLevel.WARNING, "factor_calculation", 
-                                   f"因子 {factor_id} 计算结果为空")
+                                   f"因子 {id} 计算结果为空")
                 
                 # 更新进度
                 progress = (i + 1) / len(strategy.factors) * 100
@@ -372,7 +290,7 @@ class FactorCalculator:
                 
             except Exception as e:
                 self.logger.log(LogLevel.ERROR, "factor_calculation", 
-                               f"计算因子 {factor_id} 失败: {str(e)}")
+                               f"计算因子 {id} 失败: {str(e)}")
         
         return factor_results, summaries
     
@@ -501,10 +419,10 @@ class StockSelector:
                 if not factor_config.is_enabled:
                     continue
                     
-                factor_id = factor_config.factor_id
-                if factor_id in factor_results:
-                    factor_value = factor_results[factor_id].get(stock_code, 0)
-                    stock_factor_scores[factor_id] = float(factor_value)
+                id = factor_config.id
+                if id in factor_results:
+                    factor_value = factor_results[id].get(stock_code, 0)
+                    stock_factor_scores[id] = float(factor_value)
                     composite_score += factor_config.weight * factor_value
             
             composite_scores[stock_code] = composite_score
@@ -660,11 +578,24 @@ class StrategyExecutionEngine:
             
             # 阶段3: 数据获取
             progress_tracker.start_stage("data_fetching")
-            required_fields = await self._get_required_fields(strategy)
-            data_fetcher = DataFetcher(execution_id, exec_logger, request.enable_cache)
-            stock_data, data_summary = await data_fetcher.fetch_stock_data(
-                stock_universe, required_fields, execution_date
+            
+            # 配置频率限制
+            rate_limit_config = None
+            if request.rate_limit:
+                rate_limit_config = RateLimitConfig(
+                    max_calls_per_minute=request.rate_limit.max_calls_per_minute,
+                    max_calls_per_hour=request.rate_limit.max_calls_per_hour,
+                    max_calls_per_day=request.rate_limit.max_calls_per_day,
+                    concurrent_limit=request.rate_limit.concurrent_limit
+                )
+            
+            data_fetcher = DataFetcher(execution_id, exec_logger, request.enable_cache, rate_limit_config)
+            
+            # 使用新的智能数据获取
+            stock_data, data_summary = await data_fetcher.fetch_strategy_data(
+                strategy, stock_universe, execution_date
             )
+            
             progress_tracker.complete_stage()
             execution_result.data_fetch_summary = data_summary
             
@@ -708,6 +639,61 @@ class StrategyExecutionEngine:
             execution_result.logs = exec_logger.get_logs()
             execution_result.stages = list(progress_tracker.stages.values())
             execution_result.overall_progress = progress_tracker.get_overall_progress()
+            
+            # 保存执行结果到数据库
+            try:
+                from app.db.models.strategy import StrategyExecution as ExecutionModel
+                
+                # 获取策略的数据库ID
+                strategy_db_id = None
+                if hasattr(strategy, 'id'):
+                    strategy_db_id = strategy.id
+                else:
+                    # 如果没有id字段，尝试从数据库查询
+                    from app.db.models.strategy import Strategy as StrategyModel
+                    db_strategy = db.query(StrategyModel).filter(
+                        StrategyModel.strategy_id == strategy.strategy_id
+                    ).first()
+                    if db_strategy:
+                        strategy_db_id = db_strategy.id
+                
+                if strategy_db_id is None:
+                    logger.warning(f"无法找到策略的数据库ID: {strategy.strategy_id}")
+                    strategy_db_id = 1  # 使用默认值
+                
+                # 创建数据库记录
+                db_record = ExecutionModel(
+                    execution_id=execution_id,
+                    strategy_id=strategy_db_id,
+                    execution_date=execution_date,
+                    start_time=execution_result.start_time,
+                    end_time=execution_result.end_time,
+                    total_time=execution_result.total_time,
+                    status=execution_result.status.value,
+                    current_stage=execution_result.current_stage,
+                    overall_progress=execution_result.overall_progress,
+                    stock_filter=execution_result.stock_filter.dict() if execution_result.stock_filter else None,
+                    is_dry_run=execution_result.is_dry_run,
+                    initial_stock_count=execution_result.initial_stock_count,
+                    filtered_stock_count=execution_result.filtered_stock_count,
+                    final_stock_count=execution_result.final_stock_count,
+                    data_fetch_summary=execution_result.data_fetch_summary.dict() if execution_result.data_fetch_summary else None,
+                    factor_summaries=[summary.dict() for summary in execution_result.factor_summaries],
+                    stages=[stage.dict() for stage in execution_result.stages],
+                    error_message=execution_result.error_message,
+                    logs=[log.dict() for log in execution_result.logs],
+                    selected_stocks=[stock.dict() for stock in execution_result.selected_stocks] if hasattr(execution_result, 'selected_stocks') else None,
+                    factor_performance=execution_result.factor_performance if hasattr(execution_result, 'factor_performance') else None
+                )
+                
+                db.add(db_record)
+                db.commit()
+                
+                logger.info(f"执行结果已保存到数据库: {execution_id}")
+                
+            except Exception as e:
+                logger.error(f"保存执行结果到数据库失败: {e}")
+                db.rollback()
             
             # 从正在执行列表中移除
             if execution_id in self.running_executions:
@@ -822,7 +808,75 @@ class StrategyExecutionEngine:
     
     def get_execution_progress(self, execution_id: str) -> Optional[StrategyExecutionResult]:
         """获取执行进度"""
-        return self.running_executions.get(execution_id)
+        # 首先从正在执行的列表中查找
+        if execution_id in self.running_executions:
+            return self.running_executions[execution_id]
+        
+        # 如果不在正在执行的列表中，尝试从数据库获取
+        try:
+            from app.db.models.strategy import StrategyExecution as ExecutionModel
+            from app.db.database import get_db
+            from app.schemas.strategy_execution import ExecutionStatus, StockFilter, DataFetchSummary, FactorCalculationSummary, StageProgress, ExecutionLog
+            
+            # 获取数据库会话
+            db = next(get_db())
+            
+            # 从数据库查询执行记录
+            execution_record = db.query(ExecutionModel).filter(
+                ExecutionModel.execution_id == execution_id
+            ).first()
+            
+            if execution_record:
+                # 反序列化JSON字段
+                stock_filter = None
+                if execution_record.stock_filter:
+                    stock_filter = StockFilter(**execution_record.stock_filter)
+                
+                data_fetch_summary = None
+                if execution_record.data_fetch_summary:
+                    data_fetch_summary = DataFetchSummary(**execution_record.data_fetch_summary)
+                
+                factor_summaries = []
+                if execution_record.factor_summaries:
+                    factor_summaries = [FactorCalculationSummary(**summary) for summary in execution_record.factor_summaries]
+                
+                stages = []
+                if execution_record.stages:
+                    stages = [StageProgress(**stage) for stage in execution_record.stages]
+                
+                logs = []
+                if execution_record.logs:
+                    logs = [ExecutionLog(**log) for log in execution_record.logs]
+                
+                # 构造执行结果对象
+                result = StrategyExecutionResult(
+                    execution_id=execution_record.execution_id,
+                    strategy_id=execution_record.strategy_id,
+                    execution_date=execution_record.execution_date,
+                    status=ExecutionStatus(execution_record.status),
+                    start_time=execution_record.start_time,
+                    end_time=execution_record.end_time,
+                    total_time=execution_record.total_time,
+                    stock_filter=stock_filter,
+                    is_dry_run=execution_record.is_dry_run,
+                    stages=stages,
+                    current_stage=execution_record.current_stage,
+                    overall_progress=execution_record.overall_progress,
+                    initial_stock_count=execution_record.initial_stock_count,
+                    filtered_stock_count=execution_record.filtered_stock_count,
+                    final_stock_count=execution_record.final_stock_count,
+                    data_fetch_summary=data_fetch_summary,
+                    factor_summaries=factor_summaries,
+                    error_message=execution_record.error_message,
+                    logs=logs
+                )
+                
+                return result
+            
+        except Exception as e:
+            logger.error(f"从数据库获取执行进度失败: {e}")
+        
+        return None
     
     async def cancel_execution(self, execution_id: str, reason: str = None) -> bool:
         """取消执行"""

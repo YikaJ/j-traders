@@ -95,8 +95,8 @@ const StrategyManagement: React.FC = () => {
           </h4>
           <div className="flex flex-wrap gap-2">
             {strategy.factors.slice(0, 3).map((factor) => (
-              <div key={factor.factor_id} className="badge badge-outline badge-sm">
-                {factor.factor_name}
+              <div key={factor.id} className="badge badge-outline badge-sm">
+                {factor.name}
                 {factor.is_enabled && (
                   <span className="ml-1 text-xs">({(factor.weight * 100).toFixed(1)}%)</span>
                 )}

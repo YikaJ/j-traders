@@ -12,7 +12,8 @@ import {
   weightApi,
   SelectedFactor,
   WeightPreset,
-  WeightOptimizationResult
+  WeightOptimizationResult,
+  Factor
 } from '../services/api';
 
 interface WeightConfigPanelProps {
@@ -44,7 +45,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
 
   const loadWeightPresets = async () => {
     try {
-      const presets = await weightApi.getWeightPresets();
+      const {data: presets} = await weightApi.getWeightPresets();
       setWeightPresets(presets);
     } catch (error) {
       console.error('加载权重预设失败:', error);
@@ -66,7 +67,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
     try {
       setLoading(true);
       const result = await weightApi.applyWeightPreset(factors, presetId);
-      onFactorsChange(result.factors);
+      onFactorsChange(result.data.factors);
     } catch (error) {
       console.error('应用权重预设失败:', error);
     } finally {
@@ -79,7 +80,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
     try {
       setLoading(true);
       const result = await weightApi.normalizeWeights(factors);
-      onFactorsChange(result.factors);
+      onFactorsChange(result.data.factors);
     } catch (error) {
       console.error('标准化权重失败:', error);
     } finally {
@@ -91,8 +92,8 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
   const handleOptimizeWeights = async (method: string = 'correlation_adjusted') => {
     try {
       setLoading(true);
-      const result = await weightApi.optimizeWeights(factors, method);
-      setOptimizationResult(result);
+      const { data } = await weightApi.optimizeWeights(factors, method);
+      setOptimizationResult(data);
       setShowOptimizationModal(true);
     } catch (error) {
       console.error('优化权重失败:', error);
@@ -111,16 +112,16 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
 
   // 更新因子权重
   const handleFactorWeightChange = (factorId: string, weight: number) => {
-    const updatedFactors = factors.map(factor =>
-      factor.factor_id === factorId ? { ...factor, weight: Math.max(0, Math.min(1, weight)) } : factor
+    const updatedFactors = factors.map(factor => 
+      factor.id === factorId ? { ...factor, weight: Math.max(0, Math.min(1, weight)) } : factor
     );
     onFactorsChange(updatedFactors);
   };
 
   // 切换因子启用状态
   const handleFactorToggle = (factorId: string) => {
-    const updatedFactors = factors.map(factor =>
-      factor.factor_id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
+    const updatedFactors = factors.map(factor => 
+      factor.id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
     );
     onFactorsChange(updatedFactors);
   };
@@ -202,14 +203,14 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
                 .filter(f => f.is_enabled && f.weight > 0)
                 .map((factor, index) => (
                   <div
-                    key={factor.factor_id}
+                    key={factor.id}
                     className={`h-full ${
                       index % 4 === 0 ? 'bg-primary' :
                       index % 4 === 1 ? 'bg-secondary' :
                       index % 4 === 2 ? 'bg-accent' : 'bg-info'
                     }`}
                     style={{ width: `${factor.weight * 100}%` }}
-                    title={`${factor.factor_name}: ${(factor.weight * 100).toFixed(1)}%`}
+                    title={`${factor.name}: ${(factor.weight * 100).toFixed(1)}%`}
                   />
                 ))}
             </div>
@@ -300,7 +301,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {factors.map((factor, index) => (
               <div
-                key={`${factor.factor_id}-${index}`}
+                key={`${factor.id}-${index}`}
                 className={`p-4 border rounded-lg transition-all ${
                   factor.is_enabled ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-200'
                 }`}
@@ -312,12 +313,12 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
                       type="checkbox"
                       className="checkbox checkbox-primary"
                       checked={factor.is_enabled}
-                      onChange={() => handleFactorToggle(factor.factor_id)}
+                      onChange={() => handleFactorToggle(factor.id)}
                     />
                     <div>
-                      <div className="font-medium">{factor.factor_name}</div>
+                      <div className="font-medium">{factor.name}</div>
                       <div className="text-sm text-base-content/60">
-                        {factor.factor_id}
+                        {factor.id}
                       </div>
                     </div>
                   </div>
@@ -339,7 +340,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
                     max="1"
                     step="0.005"
                     value={factor.weight}
-                    onChange={(e) => handleFactorWeightChange(factor.factor_id, parseFloat(e.target.value))}
+                    onChange={(e) => handleFactorWeightChange(factor.id, parseFloat(e.target.value))}
                     className="range range-primary flex-1"
                     disabled={!factor.is_enabled}
                   />
@@ -348,7 +349,7 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
                     className="input input-bordered input-sm w-20"
                     value={(factor.weight * 100).toFixed(1)}
                     onChange={(e) => handleFactorWeightChange(
-                      factor.factor_id,
+                      factor.id,
                       parseFloat(e.target.value) / 100 || 0
                     )}
                     step="0.1"
@@ -462,11 +463,11 @@ const WeightConfigPanel: React.FC<WeightConfigPanelProps> = ({
                     </thead>
                     <tbody>
                       {optimizationResult.optimized_factors.map((optimizedFactor, index) => {
-                        const originalFactor = factors.find(f => f.factor_id === optimizedFactor.factor_id);
+                        const originalFactor = factors.find(f => f.id === optimizedFactor.id);
                         const change = optimizedFactor.weight - (originalFactor?.weight || 0);
                         return (
-                          <tr key={optimizedFactor.factor_id}>
-                            <td>{optimizedFactor.factor_name}</td>
+                          <tr key={optimizedFactor.id}>
+                            <td>{optimizedFactor.name}</td>
                             <td>{((originalFactor?.weight || 0) * 100).toFixed(1)}%</td>
                             <td>{(optimizedFactor.weight * 100).toFixed(1)}%</td>
                             <td>

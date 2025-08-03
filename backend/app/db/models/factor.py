@@ -12,51 +12,39 @@ class Factor(Base):
     """因子模型"""
     __tablename__ = "factors"
     
-    id = Column(Integer, primary_key=True, index=True)
-    factor_id = Column(String(100), unique=True, index=True, nullable=False, comment="因子ID")
+    id = Column(Integer, primary_key=True, index=True, comment="自增ID")
+    factor_id = Column(String(100), nullable=False, unique=True, index=True, comment="因子ID")
     name = Column(String(200), nullable=False, comment="因子名称")
     display_name = Column(String(200), nullable=False, comment="显示名称")
     description = Column(Text, comment="因子描述")
     category = Column(String(50), nullable=False, comment="因子分类")
-    
-    # 核心字段：Python公式代码
     formula = Column(Text, nullable=False, comment="Python公式代码")
-    
-    # 配置字段
     input_fields = Column(JSON, comment="输入字段列表")
     default_parameters = Column(JSON, comment="默认参数配置")
     parameter_schema = Column(JSON, comment="参数验证schema")
     calculation_method = Column(String(50), default="custom", comment="计算方法")
-    
-    # 状态字段
     is_active = Column(Boolean, default=True, comment="是否启用")
     is_builtin = Column(Boolean, default=False, comment="是否内置因子")
-    
-    # 统计字段
     usage_count = Column(Integer, default=0, comment="使用次数")
     last_used_at = Column(DateTime, comment="最后使用时间")
-    
-    # 时间字段
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
-    
-    # 版本控制
     version = Column(String(20), default="1.0.0", comment="版本号")
-    
+
     def __repr__(self):
         return f"<Factor(id={self.id}, factor_id='{self.factor_id}', name='{self.name}')>"
 
 
-class FactorFormulaHistory(Base):
-    """因子公式历史记录"""
-    __tablename__ = "factor_formula_history"
+class FactorHistory(Base):
+    """因子历史记录"""
+    __tablename__ = "factor_history"
     
     id = Column(Integer, primary_key=True, index=True)
     factor_id = Column(String(100), nullable=False, index=True, comment="因子ID")
     
-    # 公式变更记录
-    old_formula = Column(Text, comment="旧公式")
-    new_formula = Column(Text, nullable=False, comment="新公式")
+    # 变更记录
+    old_code = Column(Text, comment="旧代码")
+    new_code = Column(Text, nullable=False, comment="新代码")
     old_description = Column(Text, comment="旧描述")
     new_description = Column(Text, comment="新描述")
     
@@ -68,7 +56,7 @@ class FactorFormulaHistory(Base):
     created_at = Column(DateTime, server_default=func.now(), comment="变更时间")
     
     def __repr__(self):
-        return f"<FactorFormulaHistory(id={self.id}, factor_id='{self.factor_id}')>"
+        return f"<FactorHistory(id={self.id}, factor_id='{self.factor_id}')>"
 
 
 class FactorValue(Base):
