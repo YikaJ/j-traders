@@ -40,6 +40,8 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
   const [executionProgress, setExecutionProgress] = useState<any>(null);
   const [executionLogs, setExecutionLogs] = useState<any[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [logLevel, setLogLevel] = useState<string>('');
+  const [autoRefreshLogs, setAutoRefreshLogs] = useState(true);
 
   // 执行配置状态
   const [executionConfig, setExecutionConfig] = useState({
@@ -63,7 +65,14 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
     // 执行选项
     dry_run: false,
     enable_cache: true,
-    max_execution_time: 300
+    max_execution_time: 300,
+    
+    // 频率限制
+    rate_limit_enabled: true,
+    max_calls_per_minute: 10,
+    max_calls_per_hour: 200,
+    max_calls_per_day: 1000,
+    concurrent_limit: 3
   });
 
   // 可用选项状态
@@ -114,6 +123,25 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
     };
   }, [executionId, isExecuting, onExecuted]);
 
+  // 自动刷新日志
+  useEffect(() => {
+    let logInterval: NodeJS.Timeout;
+    
+    if (executionId && showLogs && autoRefreshLogs && isExecuting) {
+      // 立即加载一次日志
+      loadExecutionLogs();
+      
+      // 每2秒刷新一次日志
+      logInterval = setInterval(() => {
+        loadExecutionLogs();
+      }, 2000);
+    }
+    
+    return () => {
+      if (logInterval) clearInterval(logInterval);
+    };
+  }, [executionId, showLogs, autoRefreshLogs, isExecuting]);
+
   const loadAvailableOptions = async () => {
     try {
       const response = await fetch('/api/v1/strategy-execution/scopes');
@@ -153,6 +181,14 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
         exclude_suspend: executionConfig.exclude_suspend
       };
 
+      // 构建API频率限制配置
+      const rateLimitConfig = executionConfig.rate_limit_enabled ? {
+        max_calls_per_minute: executionConfig.max_calls_per_minute,
+        max_calls_per_hour: executionConfig.max_calls_per_hour,
+        max_calls_per_day: executionConfig.max_calls_per_day,
+        concurrent_limit: executionConfig.concurrent_limit
+      } : null;
+
       // 执行策略
       const response = await fetch(`/api/v1/strategy-execution/${strategy.strategy_id}/execute`, {
         method: 'POST',
@@ -162,7 +198,8 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
           dry_run: executionConfig.dry_run,
           save_result: true,
           enable_cache: executionConfig.enable_cache,
-          max_execution_time: executionConfig.max_execution_time
+          max_execution_time: executionConfig.max_execution_time,
+          rate_limit: rateLimitConfig
         })
       });
 
@@ -204,7 +241,12 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
     if (!executionId) return;
     
     try {
-      const response = await fetch(`/api/v1/strategy-execution/executions/${executionId}/logs?limit=50`);
+      let url = `/api/v1/strategy-execution/executions/${executionId}/logs?limit=100`;
+      if (logLevel) {
+        url += `&level=${logLevel}`;
+      }
+      
+      const response = await fetch(url);
       if (response.ok) {
         const result = await response.json();
         setExecutionLogs(result.logs || []);
@@ -707,6 +749,104 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
               </div>
             </div>
 
+            {/* API频率限制配置 */}
+            <div className="card bg-base-200 mt-6">
+              <div className="card-body">
+                <div className="flex items-center justify-between mb-4">
+                  <h5 className="font-medium text-base-content">API频率限制</h5>
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-primary"
+                    checked={executionConfig.rate_limit_enabled}
+                    onChange={(e) => setExecutionConfig({
+                      ...executionConfig,
+                      rate_limit_enabled: e.target.checked
+                    })}
+                  />
+                </div>
+                
+                {executionConfig.rate_limit_enabled && (
+                  <div className="space-y-4">
+                    <div className="alert alert-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span className="text-sm">配置API调用频率限制，避免超出Tushare接口限制</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text text-sm">每分钟最大调用次数</span>
+                        </label>
+                        <input
+                          type="number"
+                          className="input input-bordered input-sm"
+                          placeholder="10"
+                          min="1"
+                          max="100"
+                          value={executionConfig.max_calls_per_minute}
+                          onChange={(e) => setExecutionConfig({
+                            ...executionConfig,
+                            max_calls_per_minute: parseInt(e.target.value) || 10
+                          })}
+                        />
+                      </div>
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text text-sm">每小时最大调用次数</span>
+                        </label>
+                        <input
+                          type="number"
+                          className="input input-bordered input-sm"
+                          placeholder="200"
+                          min="10"
+                          max="1000"
+                          value={executionConfig.max_calls_per_hour}
+                          onChange={(e) => setExecutionConfig({
+                            ...executionConfig,
+                            max_calls_per_hour: parseInt(e.target.value) || 200
+                          })}
+                        />
+                      </div>
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text text-sm">每天最大调用次数</span>
+                        </label>
+                        <input
+                          type="number"
+                          className="input input-bordered input-sm"
+                          placeholder="1000"
+                          min="100"
+                          max="10000"
+                          value={executionConfig.max_calls_per_day}
+                          onChange={(e) => setExecutionConfig({
+                            ...executionConfig,
+                            max_calls_per_day: parseInt(e.target.value) || 1000
+                          })}
+                        />
+                      </div>
+                      <div className="form-control">
+                        <label className="label">
+                          <span className="label-text text-sm">并发调用限制</span>
+                        </label>
+                        <input
+                          type="number"
+                          className="input input-bordered input-sm"
+                          placeholder="3"
+                          min="1"
+                          max="10"
+                          value={executionConfig.concurrent_limit}
+                          onChange={(e) => setExecutionConfig({
+                            ...executionConfig,
+                            concurrent_limit: parseInt(e.target.value) || 3
+                          })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex justify-between">
               <button
                 className="btn btn-outline"
@@ -802,30 +942,90 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
             {showLogs && (
               <div className="card bg-base-200">
                 <div className="card-body">
-                  <h5 className="font-medium mb-3">执行日志</h5>
-                  <div className="bg-base-100 rounded p-4 max-h-64 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-4">
+                    <h5 className="font-medium">执行日志</h5>
+                    <div className="flex items-center gap-3">
+                      {/* 日志级别过滤 */}
+                      <select 
+                        className="select select-bordered select-sm"
+                        value={logLevel}
+                        onChange={(e) => setLogLevel(e.target.value)}
+                      >
+                        <option value="">全部级别</option>
+                        <option value="info">信息</option>
+                        <option value="warning">警告</option>
+                        <option value="error">错误</option>
+                        <option value="debug">调试</option>
+                      </select>
+                      
+                      {/* 自动刷新控制 */}
+                      <label className="cursor-pointer label">
+                        <span className="label-text text-sm mr-2">自动刷新</span>
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-primary checkbox-sm"
+                          checked={autoRefreshLogs}
+                          onChange={(e) => setAutoRefreshLogs(e.target.checked)}
+                        />
+                      </label>
+                      
+                      {/* 手动刷新 */}
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={loadExecutionLogs}
+                        disabled={isExecuting && autoRefreshLogs}
+                      >
+                        🔄 刷新
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-base-100 rounded p-4 max-h-80 overflow-y-auto">
                     {executionLogs.length > 0 ? (
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {executionLogs.map((log, index) => (
-                          <div key={index} className="text-sm">
-                            <span className="text-base-content/60">[{formatTime(log.timestamp)}]</span>
-                            <span className={`ml-2 font-medium ${
-                              log.level === 'error' ? 'text-error' :
-                              log.level === 'warning' ? 'text-warning' :
-                              log.level === 'info' ? 'text-info' : ''
+                          <div key={index} className="text-sm font-mono">
+                            <span className="text-base-content/50 text-xs">[{formatTime(log.timestamp)}]</span>
+                            <span className={`ml-2 font-medium text-xs px-2 py-1 rounded ${
+                              log.level === 'error' ? 'bg-error/20 text-error' :
+                              log.level === 'warning' ? 'bg-warning/20 text-warning' :
+                              log.level === 'info' ? 'bg-info/20 text-info' : 
+                              log.level === 'debug' ? 'bg-base-300 text-base-content' : 'bg-base-300'
                             }`}>
-                              [{log.stage}]
+                              {log.level?.toUpperCase()}
                             </span>
+                            <span className="ml-2 text-primary font-medium">[{log.stage}]</span>
                             <span className="ml-2">{log.message}</span>
+                            {log.progress && (
+                              <span className="ml-2 text-success">({log.progress.toFixed(1)}%)</span>
+                            )}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center text-base-content/60 py-4">
-                        暂无日志数据
+                      <div className="text-center text-base-content/60 py-8">
+                        {isExecuting ? (
+                          <div className="flex flex-col items-center">
+                            <div className="loading loading-spinner loading-md mb-2"></div>
+                            <span>正在加载日志...</span>
+                          </div>
+                        ) : (
+                          <span>暂无日志数据</span>
+                        )}
                       </div>
                     )}
                   </div>
+                  
+                  {/* 日志统计 */}
+                  {executionLogs.length > 0 && (
+                    <div className="text-xs text-base-content/70 mt-2">
+                      共 {executionLogs.length} 条日志
+                      {logLevel && ` (${logLevel} 级别)`}
+                      {autoRefreshLogs && isExecuting && (
+                        <span className="ml-2 text-info">• 自动刷新中</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

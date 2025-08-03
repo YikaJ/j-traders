@@ -28,6 +28,7 @@ from app.db.models.stock import Stock, StockDaily
 from app.services.tushare_service import tushare_service
 from app.services.unified_factor_service import unified_factor_service
 from app.services.cache_service import cache_service
+from app.services.enhanced_data_fetcher import enhanced_data_fetcher, RateLimitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -127,127 +128,44 @@ class ProgressTracker:
 
 
 class DataFetcher:
-    """数据获取器"""
+    """数据获取器（包装增强数据获取器）"""
     
-    def __init__(self, execution_id: str, logger: ExecutionLogger, enable_cache: bool = True):
+    def __init__(self, execution_id: str, logger: ExecutionLogger, enable_cache: bool = True, 
+                 rate_limit_config: Optional[RateLimitConfig] = None):
         self.execution_id = execution_id
         self.logger = logger
         self.enable_cache = enable_cache
-        self.cache_hits = 0
-        self.api_calls = 0
-        self.total_data_size = 0
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.enhanced_fetcher = enhanced_data_fetcher
+        
+        # 如果提供了频率限制配置，创建新的增强获取器实例
+        if rate_limit_config:
+            from app.services.enhanced_data_fetcher import EnhancedDataFetcher
+            self.enhanced_fetcher = EnhancedDataFetcher(rate_limit_config)
+    
+    async def fetch_strategy_data(self, strategy: Any, stock_codes: List[str], 
+                                 execution_date: str) -> Tuple[pd.DataFrame, DataFetchSummary]:
+        """根据策略需求智能获取数据"""
+        return await self.enhanced_fetcher.fetch_strategy_data(
+            strategy, stock_codes, execution_date, self.logger
+        )
     
     async def fetch_stock_data(self, stock_codes: List[str], required_fields: List[str], 
                               trade_date: str) -> Tuple[pd.DataFrame, DataFetchSummary]:
-        """获取股票数据"""
-        start_time = time.time()
-        total_stocks = len(stock_codes)
-        fetched_data = []
-        failed_stocks = []
+        """传统的股票数据获取（向后兼容）"""
+        # 创建一个虚拟策略对象来包装字段需求
+        class MockStrategy:
+            def __init__(self, fields):
+                self.factors = [MockFactor(fields)]
         
-        self.logger.log(LogLevel.INFO, "data_fetching", 
-                       f"开始获取{total_stocks}只股票的数据，字段: {', '.join(required_fields)}")
+        class MockFactor:
+            def __init__(self, fields):
+                self.is_enabled = True
+                self.factor_id = "legacy_fetch"
+                # 构造简单的因子代码来表示所需字段
+                self.factor_code = f"def calculate(data):\n    return data[{fields}].sum()"
         
-        # 分批处理，避免API限制
-        batch_size = 100
-        batches = [stock_codes[i:i + batch_size] for i in range(0, len(stock_codes), batch_size)]
-        
-        for i, batch in enumerate(batches):
-            try:
-                self.logger.log(LogLevel.INFO, "data_fetching", 
-                               f"处理第{i+1}/{len(batches)}批股票 ({len(batch)}只)")
-                
-                # 尝试从缓存获取
-                cache_key = f"stock_data_{trade_date}_{hash(tuple(sorted(required_fields)))}"
-                cached_data = None
-                
-                if self.enable_cache:
-                    cached_data = await cache_service.get(cache_key)
-                    if cached_data:
-                        self.cache_hits += len(batch)
-                
-                if cached_data is None:
-                    # 从Tushare获取数据
-                    batch_data = await self._fetch_from_tushare(batch, required_fields, trade_date)
-                    self.api_calls += 1
-                    
-                    # 缓存数据
-                    if self.enable_cache and batch_data is not None:
-                        await cache_service.set(cache_key, batch_data, expire=3600)  # 缓存1小时
-                else:
-                    batch_data = cached_data
-                
-                if batch_data is not None and not batch_data.empty:
-                    fetched_data.append(batch_data)
-                    self.total_data_size += len(batch_data) * len(batch_data.columns) * 8  # 估算大小
-                else:
-                    failed_stocks.extend(batch)
-                
-                # 更新进度
-                progress = (i + 1) / len(batches) * 100
-                self.logger.log(LogLevel.INFO, "data_fetching", 
-                               f"数据获取进度: {progress:.1f}%", progress=progress)
-                
-                # 避免API限制
-                await asyncio.sleep(0.1)
-                
-            except Exception as e:
-                self.logger.log(LogLevel.ERROR, "data_fetching", 
-                               f"获取第{i+1}批数据失败: {str(e)}")
-                failed_stocks.extend(batch)
-        
-        # 合并数据
-        if fetched_data:
-            combined_data = pd.concat(fetched_data, ignore_index=True)
-        else:
-            combined_data = pd.DataFrame()
-        
-        fetch_time = time.time() - start_time
-        fetched_stocks = len(combined_data) if not combined_data.empty else 0
-        
-        summary = DataFetchSummary(
-            total_stocks=total_stocks,
-            fetched_stocks=fetched_stocks,
-            failed_stocks=len(failed_stocks),
-            cache_hits=self.cache_hits,
-            api_calls=self.api_calls,
-            data_size_mb=self.total_data_size / (1024 * 1024),
-            fetch_time=fetch_time
-        )
-        
-        self.logger.log(LogLevel.INFO, "data_fetching", 
-                       f"数据获取完成: 成功{fetched_stocks}只，失败{len(failed_stocks)}只，耗时{fetch_time:.2f}秒")
-        
-        return combined_data, summary
-    
-    async def _fetch_from_tushare(self, stock_codes: List[str], fields: List[str], 
-                                 trade_date: str) -> Optional[pd.DataFrame]:
-        """从Tushare获取数据"""
-        try:
-            # 这里应该调用具体的Tushare API
-            # 目前返回模拟数据
-            data = []
-            for code in stock_codes:
-                row = {'ts_code': code, 'trade_date': trade_date}
-                # 添加模拟的字段数据
-                for field in fields:
-                    if field in ['close', 'open', 'high', 'low']:
-                        row[field] = np.random.uniform(10, 100)
-                    elif field in ['vol', 'amount']:
-                        row[field] = np.random.uniform(1000, 100000)
-                    elif field in ['turnover_rate', 'pe', 'pb']:
-                        row[field] = np.random.uniform(0.1, 50)
-                    else:
-                        row[field] = np.random.uniform(-1, 1)
-                data.append(row)
-            
-            return pd.DataFrame(data)
-            
-        except Exception as e:
-            self.logger.log(LogLevel.ERROR, "data_fetching", 
-                           f"从Tushare获取数据失败: {str(e)}")
-            return None
+        mock_strategy = MockStrategy(required_fields)
+        return await self.fetch_strategy_data(mock_strategy, stock_codes, trade_date)
     
     async def get_stock_historical_data(self, symbol: str, end_date: str, db: Session,
                                       days: int = 252) -> pd.DataFrame:
@@ -660,11 +578,24 @@ class StrategyExecutionEngine:
             
             # 阶段3: 数据获取
             progress_tracker.start_stage("data_fetching")
-            required_fields = await self._get_required_fields(strategy)
-            data_fetcher = DataFetcher(execution_id, exec_logger, request.enable_cache)
-            stock_data, data_summary = await data_fetcher.fetch_stock_data(
-                stock_universe, required_fields, execution_date
+            
+            # 配置频率限制
+            rate_limit_config = None
+            if request.rate_limit:
+                rate_limit_config = RateLimitConfig(
+                    max_calls_per_minute=request.rate_limit.max_calls_per_minute,
+                    max_calls_per_hour=request.rate_limit.max_calls_per_hour,
+                    max_calls_per_day=request.rate_limit.max_calls_per_day,
+                    concurrent_limit=request.rate_limit.concurrent_limit
+                )
+            
+            data_fetcher = DataFetcher(execution_id, exec_logger, request.enable_cache, rate_limit_config)
+            
+            # 使用新的智能数据获取
+            stock_data, data_summary = await data_fetcher.fetch_strategy_data(
+                strategy, stock_universe, execution_date
             )
+            
             progress_tracker.complete_stage()
             execution_result.data_fetch_summary = data_summary
             

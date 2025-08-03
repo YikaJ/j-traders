@@ -130,6 +130,14 @@ class StageProgress(BaseModel):
     error_message: Optional[str] = Field(None, description="错误信息")
 
 
+class RateLimitSettings(BaseModel):
+    """频率限制设置"""
+    max_calls_per_minute: int = Field(10, ge=1, le=100, description="每分钟最大API调用次数")
+    max_calls_per_hour: int = Field(200, ge=10, le=1000, description="每小时最大API调用次数")
+    max_calls_per_day: int = Field(1000, ge=100, le=10000, description="每天最大API调用次数")
+    concurrent_limit: int = Field(3, ge=1, le=10, description="并发调用限制")
+
+
 class StrategyExecutionRequest(BaseModel):
     """策略执行请求"""
     execution_date: Optional[str] = Field(None, description="执行日期（YYYY-MM-DD）")
@@ -138,6 +146,7 @@ class StrategyExecutionRequest(BaseModel):
     save_result: bool = Field(True, description="是否保存执行结果")
     enable_cache: bool = Field(True, description="是否启用数据缓存")
     max_execution_time: Optional[int] = Field(300, ge=60, le=3600, description="最大执行时间（秒）")
+    rate_limit: Optional[RateLimitSettings] = Field(None, description="API频率限制设置")
 
 
 class DataFetchSummary(BaseModel):
