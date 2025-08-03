@@ -1,79 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import {
-  ChartBarIcon
-} from '@heroicons/react/24/outline';
-
-// 组件导入
+import React, { useState } from 'react';
+import { ChartBarIcon, CircleStackIcon } from '@heroicons/react/24/outline';
 import FactorLibrary from '../components/FactorLibrary';
-import SelectedFactorsOverview from '../components/quantitative/SelectedFactorsOverview';
 import MessageAlert from '../components/dashboard/MessageAlert';
+import { SelectedFactor } from '../services/api';
 
-// API导入
-import {
-  SelectedFactor
-} from '../services/api';
+interface QuantitativeSelectionProps {}
 
-const QuantitativeSelection: React.FC = () => {
-  // 主要状态
-  const [selectedFactors, setSelectedFactors] = useState<SelectedFactor[]>([]);
-
-  // 消息状态
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', text: string } | null>(null);
-
-  // 显示消息
-  const showMessage = (type: 'success' | 'error' | 'info' | 'warning', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 5000);
-  };
-
-  // 处理因子选择
-  const handleFactorSelect = (factor: SelectedFactor) => {
-    // 检查是否已存在
-    const exists = selectedFactors.some(f => f.id === factor.id);
-    if (exists) {
-      showMessage('warning', '该因子已经添加过了');
-      return;
-    }
-
-    // 添加因子
-    const updatedFactors = [...selectedFactors, { ...factor, weight: 1.0, is_enabled: true }];
-    setSelectedFactors(updatedFactors);
-    showMessage('success', `已添加因子: ${factor.display_name}`);
-  };
-
-  // 移除因子
-  const handleRemoveFactor = (factorId: string) => {
-    const updatedFactors = selectedFactors.filter(f => f.id !== factorId);
-    setSelectedFactors(updatedFactors);
-    showMessage('info', '因子已移除');
-  };
-
-  // 更新因子权重
-  const handleFactorWeightChange = (factorId: string, weight: number) => {
-    setSelectedFactors(selectedFactors.map(factor =>
-      factor.id === factorId ? { ...factor, weight } : factor
-    ));
-  };
-
-  // 切换因子启用状态
-  const handleFactorToggle = (factorId: string) => {
-    setSelectedFactors(selectedFactors.map(factor =>
-      factor.id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
-    ));
-  };
-
-  // 计算总权重
-  const getTotalWeight = () => {
-    return selectedFactors
-      .filter(f => f.is_enabled)
-      .reduce((sum, factor) => sum + (factor.weight ?? 0), 0);
-  };
-
-  // 检查权重是否有效
-  const isWeightValid = () => {
-    const total = getTotalWeight();
-    return Math.abs(total - 1.0) < 0.01; // 1% 误差范围
-  };
+const QuantitativeSelection: React.FC<QuantitativeSelectionProps> = () => {
+  const [activeTab, setActiveTab] = useState<'factors'>('factors');
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; text: string } | null>(null);
 
   return (
     <div className="space-y-6">
@@ -83,34 +18,19 @@ const QuantitativeSelection: React.FC = () => {
       {/* 顶部导航 */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div className="tabs tabs-boxed">
-          <a className="tab tab-active">
+          <a 
+            className={`tab ${activeTab === 'factors' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('factors')}
+          >
             <ChartBarIcon className="w-4 h-4 mr-2" />
             因子库
           </a>
         </div>
       </div>
 
-      {/* 已选因子概览 */}
-      {selectedFactors.length > 0 && (
-        <SelectedFactorsOverview
-          selectedFactors={selectedFactors}
-          currentStrategy={null}
-          isWeightValid={isWeightValid}
-          getTotalWeight={getTotalWeight}
-          onRemoveFactor={handleRemoveFactor}
-          onFactorWeightChange={handleFactorWeightChange}
-          onFactorToggle={handleFactorToggle}
-          onNormalizeWeights={() => {}}
-        />
-      )}
-
       {/* 主要内容区域 */}
       <div className="min-h-[600px]">
-        <FactorLibrary
-          mode="selection"
-          onFactorSelect={handleFactorSelect}
-          selectedFactors={selectedFactors}
-        />
+        <FactorLibrary />
       </div>
     </div>
   );

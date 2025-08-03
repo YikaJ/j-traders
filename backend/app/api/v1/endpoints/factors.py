@@ -268,7 +268,6 @@ async def get_factors(
                 display_name=factor.get('display_name', ''),
                 description=factor.get('description', ''),
                 code=factor.get('code', ''),
-                input_fields=factor.get('input_fields', []),
                 default_parameters=factor.get('default_parameters', {}),
                 parameter_schema=factor.get('parameter_schema'),
                 calculation_method=factor.get('calculation_method', 'custom'),
@@ -316,7 +315,6 @@ async def get_factor(
             display_name=factor_info.get('display_name', ''),
             description=factor_info.get('description', ''),
             code=factor_info.get('code', ''),
-            input_fields=factor_info.get('input_fields', []),
             default_parameters=factor_info.get('default_parameters', {}),
             parameter_schema=factor_info.get('parameter_schema'),
             calculation_method=factor_info.get('calculation_method', 'custom'),
@@ -343,26 +341,44 @@ async def create_factor(
     db: Session = Depends(get_db)
 ):
     """
-    创建新因子
+    创建因子
     """
     try:
-        # 处理前端发送的数据格式
-        factor_data_dict = factor_data.dict()
-        
-        # 如果前端发送的是formula，需要映射到code字段
-        if 'formula' in factor_data_dict and 'code' not in factor_data_dict:
-            factor_data_dict['code'] = factor_data_dict['formula']
-        
-        # 移除因子ID相关字段，让后端自动生成
-        factor_data_dict.pop('id', None)
-        factor_data_dict.pop('factor_id', None)
-        
-        created_factor = unified_factor_service.create_factor(factor_data_dict, db)
-        return created_factor
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # 使用统一因子服务创建因子
+        created_factor = unified_factor_service.create_factor(factor_data.dict(), db)
+        if created_factor:
+            return created_factor
+        else:
+            raise HTTPException(status_code=400, detail="创建因子失败")
+    
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建因子失败: {str(e)}")
+        logger.error(f"创建因子失败: {e}")
+        raise HTTPException(status_code=500, detail="创建因子失败")
+
+
+@router.post("/custom/", response_model=FactorResponse)
+async def create_custom_factor(
+    factor_data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """
+    创建自定义因子（包含标准化方案）
+    """
+    try:
+        # 使用统一因子服务创建因子
+        created_factor = unified_factor_service.create_factor(factor_data, db)
+        if created_factor:
+            return created_factor
+        else:
+            raise HTTPException(status_code=400, detail="创建自定义因子失败")
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"创建自定义因子失败: {e}")
+        raise HTTPException(status_code=500, detail="创建自定义因子失败")
 
 
 @router.put("/{id}", response_model=FactorResponse)

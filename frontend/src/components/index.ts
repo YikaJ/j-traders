@@ -1,6 +1,12 @@
 // 统一导出所有组件
 export { default as FactorLibrary } from './FactorLibrary';
-export { default as StrategyConfigManager } from './StrategyConfigManager';
+export { default as FactorCreateModalImproved } from './FactorCreateModalImproved';
+export { default as FactorDetailAndFormulaModal } from './FactorDetailAndFormulaModal';
+export { default as FactorEditModal } from './FactorEditModal';
+export { default as FactorHistoryModal } from './FactorHistoryModal';
+export { default as FactorNormalizationModal } from './FactorNormalizationModal';
+export { default as FactorNormalizationService } from './FactorNormalizationService';
+export { default as FactorNormalizationTool } from './FactorNormalizationTool';
 
 // Dashboard 相关组件
 export { default as MarketIndicesCard } from './dashboard/MarketIndicesCard';

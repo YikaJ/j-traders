@@ -3,8 +3,7 @@ import { ChartBarIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { factorApi, Factor, SelectedFactor, FactorTag } from '../services/api';
 import FactorSearch from './FactorSearch';
 import FactorGrid from './FactorGrid';
-import FactorDetailModal from './FactorDetailModal';
-import FactorFormulaModal from './FactorFormulaModal';
+import FactorDetailAndFormulaModal from './FactorDetailAndFormulaModal';
 import FactorEditModal from './FactorEditModal';
 import FactorEditModalImproved from './FactorEditModalImproved';
 import FactorCreateModal from './FactorCreateModal';
@@ -12,15 +11,9 @@ import FactorCreateModalImproved from './FactorCreateModalImproved';
 import FactorHistoryModal from './FactorHistoryModal';
 
 interface FactorLibraryProps {
-  onFactorSelect?: (factor: SelectedFactor) => void;
-  selectedFactors?: SelectedFactor[];
-  mode?: 'selection' | 'browse';
 }
 
 const FactorLibrary: React.FC<FactorLibraryProps> = ({
-  onFactorSelect,
-  selectedFactors = [],
-  mode = 'browse'
 }) => {
   const [factors, setFactors] = useState<Factor[]>([]);
   const [filteredFactors, setFilteredFactors] = useState<Factor[]>([]);
@@ -31,8 +24,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
   const [selectedFactor, setSelectedFactor] = useState<Factor | null>(null);
   
   // 模态框状态
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showFormulaModal, setShowFormulaModal] = useState(false);
+  const [showDetailAndFormulaModal, setShowDetailAndFormulaModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -85,47 +77,13 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
     setFilteredFactors(filtered);
   }, [factors, selectedTags, searchQuery]);
 
-  // 检查因子是否已选择
-  const isFactorSelected = (factorId: string) => {
-    return selectedFactors.some(f => f.id === factorId);
-  };
-
-  // 处理因子选择
-  const handleFactorSelect = (factor: Factor) => {
-    if (onFactorSelect) {
-      if (isFactorSelected(factor.id)) {
-        // 取消选择：找到已选择的因子并移除
-        const selectedFactor = selectedFactors.find(f => f.id === factor.id);
-        if (selectedFactor) {
-          onFactorSelect(selectedFactor);
-        }
-      } else {
-        // 选择：创建新的 SelectedFactor 对象
-        const newSelectedFactor: SelectedFactor = {
-          id: factor.id,
-          name: factor.name,
-          display_name: factor.display_name,
-          description: factor.description,
-          tags: factor.tags || [],
-          code: factor.code,
-          weight: 1.0,
-          is_enabled: true
-        };
-        onFactorSelect(newSelectedFactor);
-      }
-    }
-  };
-
   // 处理因子操作
   const handleFactorAction = (action: string, factor: Factor) => {
     setSelectedFactor(factor);
     
     switch (action) {
       case 'detail':
-        setShowDetailModal(true);
-        break;
-      case 'formula':
-        setShowFormulaModal(true);
+        setShowDetailAndFormulaModal(true);
         break;
       case 'edit':
         setShowEditModal(true);
@@ -133,17 +91,8 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
       case 'history':
         setShowHistoryModal(true);
         break;
-      case 'select':
-        handleFactorSelect(factor);
-        break;
       case 'remove':
         // 移除因子：通过调用 onFactorSelect 来取消选择
-        if (onFactorSelect) {
-          const selectedFactor = selectedFactors.find(f => f.id === factor.id);
-          if (selectedFactor) {
-            onFactorSelect(selectedFactor);
-          }
-        }
         break;
     }
   };
@@ -226,10 +175,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
         {/* 因子网格 */}
         <FactorGrid
           factors={filteredFactors}
-          selectedFactors={selectedFactors}
-          mode={mode}
           onFactorAction={handleFactorAction}
-          isFactorSelected={isFactorSelected}
         />
 
         {/* 无结果提示 */}
@@ -237,7 +183,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
           <div className="text-center py-8">
             <div className="text-base-content/60">
               {searchQuery || selectedTags.length > 0
-                ? '没有找到匹配的因子'
+                ? '没有找到匹配的因子'  
                 : '暂无可用因子'}
             </div>
           </div>
@@ -247,22 +193,10 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
       {/* 模态框组件 */}
       {selectedFactor && (
         <>
-          <FactorDetailModal
+          <FactorDetailAndFormulaModal
             factor={selectedFactor}
-            isOpen={showDetailModal}
-            onClose={() => setShowDetailModal(false)}
-            onAction={handleFactorAction}
-            mode={mode}
-            isSelected={isFactorSelected(selectedFactor.id)}
-          />
-
-          <FactorFormulaModal
-            factor={selectedFactor}
-            isOpen={showFormulaModal}
-            onClose={() => setShowFormulaModal(false)}
-            onAction={handleFactorAction}
-            mode={mode}
-            isSelected={isFactorSelected(selectedFactor.id)}
+            isOpen={showDetailAndFormulaModal}
+            onClose={() => setShowDetailAndFormulaModal(false)}
           />
 
           <FactorEditModalImproved

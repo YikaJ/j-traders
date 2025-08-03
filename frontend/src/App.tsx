@@ -12,6 +12,7 @@ import QuantitativeSelection from './pages/QuantitativeSelection';
 import Watchlist from './pages/Watchlist';
 import StrategyManagement from './pages/StrategyManagement';
 
+
 // 通用组件
 import ThemeToggle from './components/common/ThemeToggle';
 
@@ -39,7 +40,8 @@ const menuItems = [
     icon: CurrencyDollarIcon,
     label: '策略管理',
     path: '/strategy'
-  }
+  },
+
 ];
 
 const AppContent: React.FC = () => {
@@ -50,6 +52,7 @@ const AppContent: React.FC = () => {
       case '/': return '大盘监控';
       case '/factors': return '因子库';
       case '/watchlist': return '自选股管理';
+      case '/test': return '测试模态框';
       default: return '量化选股系统';
     }
   };
@@ -89,10 +92,11 @@ const AppContent: React.FC = () => {
           {/* Page content */}
           <main className="flex-1 p-6">
             <Routes>
-                              <Route path="/" element={<Dashboard />} />
-                <Route path="/factors" element={<QuantitativeSelection />} />
-                <Route path="/watchlist" element={<Watchlist />} />
-                <Route path="/strategy" element={<StrategyManagement />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/factors" element={<QuantitativeSelection />} />
+              <Route path="/watchlist" element={<Watchlist />} />
+              <Route path="/strategy" element={<StrategyManagement />} />
+
             </Routes>
           </main>
         </div>

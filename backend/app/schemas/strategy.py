@@ -14,7 +14,7 @@ class StrategyFactor(BaseModel):
     is_enabled: bool = Field(True, description="是否启用")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "factor_id": "alpha001",
                 "weight": 0.3,
@@ -43,6 +43,8 @@ class StrategyConfig(BaseModel):
     max_results: int = Field(50, ge=1, le=1000, description="最大选股数量")
     rebalance_frequency: str = Field("weekly", description="调仓频率：daily, weekly, monthly")
     ranking_method: str = Field("composite", description="排序方法：composite, weighted_sum")
+    standardization_method: str = Field("zscore", description="标准化方法：zscore, rank, sign, minmax, robust")
+    standardization_lookback: int = Field(252, ge=1, le=1000, description="标准化回看期数")
     
     
 class StrategyBase(BaseModel):

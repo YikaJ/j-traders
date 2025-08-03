@@ -51,7 +51,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
     description: '',
     factors: [] as SelectedFactor[],
     tags: [] as string[],
-    max_results: 100
+    max_results: 100,
+    standardization_method: 'zscore' as 'zscore' | 'rank' | 'sign' | 'minmax' | 'robust',
+    standardization_lookback: 252
   });
 
   // 加载数据
@@ -206,7 +208,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
       description: strategy.description,
       factors: strategy.factors,
       tags: strategy.tags,
-      max_results: strategy.max_results
+      max_results: strategy.max_results,
+      standardization_method: strategy.standardization_method || 'zscore',
+      standardization_lookback: strategy.standardization_lookback || 252
     });
     setShowEditModal(true);
   };
@@ -219,7 +223,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
       description: strategy.description,
       factors: strategy.factors,
       tags: strategy.tags,
-      max_results: strategy.max_results
+      max_results: strategy.max_results,
+      standardization_method: strategy.standardization_method || 'zscore',
+      standardization_lookback: strategy.standardization_lookback || 252
     });
     setShowWeightModal(true);
   };
@@ -259,7 +265,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
         description: strategyConfig.description,
         factors: strategyConfig.factors,
         tags: ['template'],
-        max_results: strategyConfig.max_results || 100
+        max_results: strategyConfig.max_results || 100,
+        standardization_method: template.standardization_method || 'zscore',
+        standardization_lookback: template.standardization_lookback || 252
       });
       setShowTemplateModal(false);
       setShowCreateModal(true);
@@ -276,7 +284,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
       description: '',
       factors: [],
       tags: [],
-      max_results: 100
+      max_results: 100,
+      standardization_method: 'zscore',
+      standardization_lookback: 252
     });
   };
 

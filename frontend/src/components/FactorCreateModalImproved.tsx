@@ -7,8 +7,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { factorApi, CustomFactorCreateRequest, FactorTag } from '../services/api';
-import FieldSelector from './FieldSelector';
-import TagInput from './common/TagInput';
+import TagInput, { Tag } from './common/TagInput';
 
 interface FactorCreateModalImprovedProps {
   isOpen: boolean;
@@ -26,6 +25,7 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
     display_name: '',
     description: '',
     formula: '',
+    normalization_code: '',
     input_fields: ['close'],
     default_parameters: {},
     calculation_method: 'formula',
@@ -37,6 +37,26 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
   const [isLoadingTags, setIsLoadingTags] = useState(false);
+
+  // 类型转换函数：FactorTag -> Tag
+  const convertFactorTagToTag = (factorTag: FactorTag): Tag => ({
+    id: factorTag.id.toString(),
+    name: factorTag.name,
+    display_name: factorTag.display_name,
+    color: factorTag.color,
+  });
+
+  // 类型转换函数：Tag -> FactorTag
+  const convertTagToFactorTag = (tag: Tag): FactorTag => ({
+    id: parseInt(tag.id),
+    name: tag.name,
+    display_name: tag.display_name,
+    color: tag.color,
+    is_active: true,
+    usage_count: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 
   // 加载可用标签
   useEffect(() => {
@@ -104,54 +124,48 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
 
   // 保存新因子
   const handleSaveNewFactor = async () => {
-    const errors = validateForm();
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
-
     try {
       setIsCreating(true);
       setValidationErrors([]);
 
-      // 转换为后端期望的格式
-      const factorData = {
+      // 验证表单
+      const errors = validateForm();
+      if (errors.length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
+
+      // 准备创建请求数据
+      const createRequest: CustomFactorCreateRequest = {
         name: createFactorForm.name,
         display_name: createFactorForm.display_name,
         description: createFactorForm.description,
-        code: createFactorForm.formula,  // 将formula映射为code
-        input_fields: createFactorForm.input_fields,
+        formula: createFactorForm.formula,
+
+        normalization_code: createFactorForm.normalization_code,
         default_parameters: createFactorForm.default_parameters,
         calculation_method: createFactorForm.calculation_method,
+        input_fields: createFactorForm.input_fields,
+        tag_ids: selectedTags.map(tag => tag.id),
       };
 
-      const createdFactor = await factorApi.createFactor(factorData);
-
-      // 如果有选择的标签，创建标签关联
-      if (selectedTags.length > 0) {
-        try {
-          await factorApi.createFactorTagRelations({
-            factor_id: createdFactor.id,
-            tag_ids: selectedTags.map(tag => tag.id),
-            tags: selectedTags,
-          });
-        } catch (error) {
-          console.error('创建标签关联失败:', error);
-          // 不阻止因子创建成功
-        }
-      }
+      // 调用API创建因子
+      await factorApi.createCustomFactor(createRequest);
 
       // 显示成功动画
       setShowSuccessAnimation(true);
       setTimeout(() => {
         setShowSuccessAnimation(false);
-        onClose();
-        onCreated();
         handleResetForm();
-      }, 1500);
-    } catch (error) {
+        onCreated();
+        onClose();
+      }, 2000);
+
+    } catch (error: any) {
       console.error('创建因子失败:', error);
-      setValidationErrors(['创建因子失败，请检查网络连接或稍后重试']);
+      setValidationErrors([
+        error.response?.data?.detail || error.message || '创建因子失败，请重试'
+      ]);
     } finally {
       setIsCreating(false);
     }
@@ -164,6 +178,8 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
       display_name: '',
       description: '',
       formula: '',
+
+      normalization_code: '',
       input_fields: ['close'],
       default_parameters: {},
       calculation_method: 'formula',
@@ -197,22 +213,62 @@ ${inputFields
   .join('\n')}
     
     返回:
-        pandas.Series - 计算得到的因子值
+        float - 因子原始值，标准化在策略层面处理
     """
+    import pandas as pd
+    import numpy as np
+    
     # 获取输入数据
 ${dataAccess}
     
     # 在这里编写你的因子计算逻辑
-    # 示例：计算价格变化率
+    # 示例：计算价格动量因子
     returns = data['close'].pct_change()
     
-    # 计算过去10天的累积收益（可根据需要调整）
-    factor_value = returns.rolling(window=10).sum()
+    # 计算过去10天的累积收益
+    momentum = returns.rolling(window=10).sum()
     
-    # 处理无效值
-    factor_value = factor_value.fillna(0)
+    # 获取最新值
+    latest_momentum = momentum.iloc[-1]
     
-    return factor_value`;
+    # 检查数据有效性
+    if pd.isna(latest_momentum):
+        return 0.0
+    
+    # 返回原始值，标准化在策略层面处理
+    return float(latest_momentum)`;
+  };
+
+  // 生成默认标准化代码模板
+  const generateDefaultNormalizationCode = () => {
+    return `def normalize(data):
+    """
+    自定义标准化逻辑
+    
+    参数:
+        data: pandas.DataFrame - 包含股票历史数据的DataFrame
+        
+    可用字段:
+        - 因子原始值 (factor_value)
+        
+    返回:
+        pandas.Series - 标准化后的因子值
+    """
+    import pandas as pd
+    import numpy as np
+    
+    # 获取因子原始值
+    factor_value = data['factor_value']
+    
+    # 在这里编写你的标准化逻辑
+    # 示例：将因子值缩放到[0,1]区间
+    normalized_result = (factor_value - factor_value.min()) / (factor_value.max() - factor_value.min())
+    
+    # 检查数据有效性
+    if pd.isna(normalized_result).any():
+        return pd.Series(np.nan, index=factor_value.index)
+    
+    return normalized_result`;
   };
 
   // 获取字段描述
@@ -235,7 +291,7 @@ ${dataAccess}
   const StepIndicator = () => (
     <div className="flex items-center justify-center mb-6">
       <div className="flex items-center space-x-2">
-        {[1, 2, 3].map((step) => (
+        {[1, 2, 3, 4].map((step) => (
           <React.Fragment key={step}>
             <div
               className={`
@@ -250,7 +306,7 @@ ${dataAccess}
             >
               {step}
             </div>
-            {step < 3 && (
+            {step < 4 && (
               <div
                 className={`
                 w-12 h-0.5 transition-all duration-300
@@ -391,10 +447,13 @@ ${dataAccess}
                   </div>
                 ) : (
                   <TagInput
-                    tags={selectedTags}
-                    availableTags={availableTags}
-                    onTagsChange={setSelectedTags}
-                    onCreateTag={handleCreateTag}
+                    tags={selectedTags.map(convertFactorTagToTag)}
+                    availableTags={availableTags.map(convertFactorTagToTag)}
+                    onTagsChange={(tags: Tag[]) => setSelectedTags(tags.map(convertTagToFactorTag))}
+                    onCreateTag={async (tagName: string) => {
+                      const result = await handleCreateTag(tagName);
+                      return result ? convertFactorTagToTag(result) : null;
+                    }}
                     placeholder="选择或创建标签..."
                     maxTags={5}
                   />
@@ -430,88 +489,14 @@ ${dataAccess}
                     !createFactorForm.display_name
                   }
                 >
-                  下一步：选择数据字段
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 第二步：选择输入字段 */}
-          {currentStep === 2 && (
-            <div className="space-y-4">
-              <div className="text-center mb-6">
-                <h4 className="text-lg font-semibold text-base-content mb-2">
-                  数据字段配置
-                </h4>
-                <p className="text-base-content/70">
-                  选择因子计算所需的数据字段
-                </p>
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-medium">输入字段 *</span>
-                  <span className="label-text-alt text-xs">
-                    因子计算时可以使用的数据字段
-                  </span>
-                </label>
-                <FieldSelector
-                  selectedFields={createFactorForm.input_fields}
-                  onChange={(fields) =>
-                    setCreateFactorForm({
-                      ...createFactorForm,
-                      input_fields: fields,
-                    })
-                  }
-                  placeholder="请选择因子计算需要的数据字段..."
-                  showValidation={true}
-                />
-              </div>
-
-              {/* 字段预览 */}
-              {createFactorForm.input_fields.length > 0 && (
-                <div className="bg-base-200/50 rounded-lg p-4">
-                  <h5 className="font-medium text-base-content mb-3">
-                    已选择的字段预览
-                  </h5>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {createFactorForm.input_fields.map((field) => (
-                      <div
-                        key={field}
-                        className="bg-base-100 rounded p-2 text-sm"
-                      >
-                        <span className="font-medium text-primary">
-                          data['${field}']
-                        </span>
-                        <div className="text-base-content/70">
-                          {getFieldDescription(field)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between pt-4">
-                <button
-                  className="btn btn-outline"
-                  onClick={() => setCurrentStep(1)}
-                >
-                  上一步
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => setCurrentStep(3)}
-                  disabled={createFactorForm.input_fields.length === 0}
-                >
                   下一步：编写代码
                 </button>
               </div>
             </div>
           )}
 
-          {/* 第三步：编写代码 */}
-          {currentStep === 3 && (
+          {/* 第二步：编写代码 */}
+          {currentStep === 2 && (
             <div className="space-y-4">
               <div className="text-center mb-6">
                 <h4 className="text-lg font-semibold text-base-content mb-2">
@@ -571,32 +556,244 @@ ${dataAccess}
 
               {/* 代码编写帮助 */}
               <div className="bg-info/10 border border-info/20 rounded-lg p-4">
-                <h5 className="font-semibold text-info mb-3">💡 编写提示</h5>
+                <h5 className="font-semibold text-info mb-3">💡 因子设计提示</h5>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div>
-                    <h6 className="font-medium mb-2">常用函数:</h6>
+                    <h6 className="font-medium mb-2">设计原则:</h6>
                     <ul className="space-y-1 text-base-content/70">
                       <li>
-                        <code>.pct_change()</code> - 计算收益率
+                        <code>返回原始值</code> - 因子返回原始计算结果
                       </li>
                       <li>
-                        <code>.rolling(n).mean()</code> - n日移动平均
+                        <code>策略层面标准化</code> - 标准化在策略层面统一处理
                       </li>
                       <li>
-                        <code>.rolling(n).std()</code> - n日标准差
+                        <code>保持简洁</code> - 专注于因子逻辑，避免复杂处理
                       </li>
                       <li>
-                        <code>.shift(n)</code> - 向前/后移动n期
+                        <code>易于复用</code> - 同一因子可用于不同标准化策略
                       </li>
                     </ul>
                   </div>
                   <div>
-                    <h6 className="font-medium mb-2">注意事项:</h6>
+                    <h6 className="font-medium mb-2">多因子模型优势:</h6>
                     <ul className="space-y-1 text-base-content/70">
-                      <li>• 函数必须返回pandas.Series</li>
-                      <li>• 处理空值和异常情况</li>
-                      <li>• 避免未来数据泄露</li>
-                      <li>• 保持代码简洁易懂</li>
+                      <li>• 策略层面统一管理标准化</li>
+                      <li>• 支持动态调整标准化方法</li>
+                      <li>• 便于因子组合和权重优化</li>
+                      <li>• 提高因子复用性和灵活性</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4">
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setCurrentStep(1)}
+                >
+                  上一步
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setCurrentStep(3)}
+                  disabled={!createFactorForm.formula.trim()}
+                >
+                  下一步：标准化方案
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 第三步：标准化方案 */}
+          {currentStep === 3 && (
+            <div className="space-y-4">
+              <div className="text-center mb-6">
+                <h4 className="text-lg font-semibold text-base-content mb-2">
+                  标准化方案
+                </h4>
+                <p className="text-base-content/70">选择因子的标准化处理方法</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* 标准化方法选择 */}
+                <div className="space-y-4">
+                  <div className="card bg-base-200 shadow-lg">
+                    <div className="card-body">
+                      <h5 className="card-title text-base mb-4">选择标准化方法</h5>
+                      
+                      <div className="space-y-3">
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-primary w-full justify-start"
+                          onClick={() => {
+                            const zscoreCode = `def normalize_factor(factor_values):
+    """Z-Score 标准化"""
+    import numpy as np
+    
+    if len(factor_values) == 0:
+        return factor_values
+    
+    mean_val = np.mean(factor_values)
+    std_val = np.std(factor_values)
+    
+    if std_val == 0:
+        return factor_values - mean_val
+    
+    return (factor_values - mean_val) / std_val`;
+                            setCreateFactorForm({
+                              ...createFactorForm,
+                              normalization_code: zscoreCode,
+                            });
+                          }}
+                        >
+                          <div className="w-3 h-3 bg-primary rounded-full mr-3"></div>
+                          Z-Score 标准化
+                          <span className="badge badge-primary badge-sm ml-auto">推荐</span>
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="btn btn-outline w-full justify-start"
+                          onClick={() => {
+                            const minmaxCode = `def normalize_factor(factor_values):
+    """Min-Max 标准化"""
+    import numpy as np
+    
+    if len(factor_values) == 0:
+        return factor_values
+    
+    min_val = np.min(factor_values)
+    max_val = np.max(factor_values)
+    
+    if max_val == min_val:
+        return factor_values - min_val
+    
+    return (factor_values - min_val) / (max_val - min_val)`;
+                            setCreateFactorForm({
+                              ...createFactorForm,
+                              normalization_code: minmaxCode,
+                            });
+                          }}
+                        >
+                          <div className="w-3 h-3 bg-secondary rounded-full mr-3"></div>
+                          Min-Max 标准化
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="btn btn-outline w-full justify-start"
+                          onClick={() => {
+                            const rankCode = `def normalize_factor(factor_values):
+    """Rank 标准化"""
+    import numpy as np
+    
+    if len(factor_values) == 0:
+        return factor_values
+    
+    # 计算排名并标准化到[0,1]区间
+    ranks = np.argsort(np.argsort(factor_values))
+    return ranks / (len(factor_values) - 1) if len(factor_values) > 1 else ranks`;
+                            setCreateFactorForm({
+                              ...createFactorForm,
+                              normalization_code: rankCode,
+                            });
+                          }}
+                        >
+                          <div className="w-3 h-3 bg-accent rounded-full mr-3"></div>
+                          Rank 标准化
+                        </button>
+                        
+                        <button
+                          type="button"
+                          className="btn btn-outline w-full justify-start"
+                          onClick={() => {
+                            setCreateFactorForm({
+                              ...createFactorForm,
+                              normalization_code: generateDefaultNormalizationCode(),
+                            });
+                          }}
+                        >
+                          <div className="w-3 h-3 bg-neutral rounded-full mr-3"></div>
+                          自定义模板
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 标准化代码编辑器 */}
+                <div className="form-control lg:col-span-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="label">
+                      <span className="label-text font-medium">标准化代码</span>
+                      <span className="label-text-alt text-xs">点击左侧按钮选择模板，或直接编辑代码</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline btn-primary"
+                      onClick={() =>
+                        setCreateFactorForm({
+                          ...createFactorForm,
+                          normalization_code: generateDefaultNormalizationCode(),
+                        })
+                      }
+                    >
+                      <SparklesIcon className="w-4 h-4 mr-1" />
+                      重置模板
+                    </button>
+                  </div>
+
+                  <div className="border border-base-300 rounded-lg overflow-hidden">
+                    <Editor
+                      height="400px"
+                      defaultLanguage="python"
+                      value={createFactorForm.normalization_code}
+                      onChange={(value) =>
+                        setCreateFactorForm({
+                          ...createFactorForm,
+                          normalization_code: value || '',
+                        })
+                      }
+                      options={{
+                        readOnly: false,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 14,
+                        lineNumbers: 'on',
+                        wordWrap: 'on',
+                        folding: true,
+                        quickSuggestions: true,
+                        autoIndent: 'full',
+                        formatOnPaste: true,
+                        formatOnType: true,
+                      }}
+                      theme="vs-dark"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 标准化说明 */}
+              <div className="bg-success/10 border border-success/20 rounded-lg p-4">
+                <h5 className="font-semibold text-success mb-3">📊 标准化说明</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <h6 className="font-medium mb-2">标准化方法:</h6>
+                    <ul className="space-y-1 text-base-content/70">
+                      <li><code>Z-Score</code> - 均值为0，标准差为1的标准化</li>
+                      <li><code>Min-Max</code> - 缩放到[0,1]区间</li>
+                      <li><code>Rank</code> - 基于排序的标准化</li>
+                      <li><code>Custom</code> - 自定义标准化逻辑</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h6 className="font-medium mb-2">使用建议:</h6>
+                    <ul className="space-y-1 text-base-content/70">
+                      <li>• 大多数因子推荐使用Z-Score标准化</li>
+                      <li>• 自定义代码需要返回标准化后的Series</li>
+                      <li>• 变量名必须为normalized_result</li>
+                      <li>• 支持pandas和numpy库</li>
                     </ul>
                   </div>
                 </div>
@@ -610,9 +807,54 @@ ${dataAccess}
                   上一步
                 </button>
                 <button
+                  className="btn btn-primary"
+                  onClick={() => setCurrentStep(4)}
+                >
+                  下一步：确认创建
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 第四步：确认创建 */}
+          {currentStep === 4 && (
+            <div className="space-y-4">
+              <div className="text-center mb-6">
+                <h4 className="text-lg font-semibold text-base-content mb-2">
+                  确认创建
+                </h4>
+                <p className="text-base-content/70">检查因子信息并创建</p>
+              </div>
+
+              {/* 因子信息预览 */}
+              <div className="bg-base-200 rounded-lg p-6">
+                <h5 className="font-semibold mb-4">因子信息预览</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p><strong>名称:</strong> {createFactorForm.name}</p>
+                    <p><strong>显示名称:</strong> {createFactorForm.display_name}</p>
+                    <p><strong>标准化:</strong> Z-Score</p>
+                    <p><strong>标签:</strong> {selectedTags.map(tag => tag.display_name).join(', ') || '无'}</p>
+                  </div>
+                  <div>
+                    <p><strong>描述:</strong> {createFactorForm.description || '无'}</p>
+                    <p><strong>代码长度:</strong> {createFactorForm.formula.length} 字符</p>
+                    <p><strong>标准化代码:</strong> {createFactorForm.normalization_code ? '已设置' : '使用默认'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4">
+                <button
+                  className="btn btn-outline"
+                  onClick={() => setCurrentStep(3)}
+                >
+                  上一步
+                </button>
+                <button
                   className={`btn btn-success ${isCreating ? 'loading' : ''}`}
                   onClick={handleSaveNewFactor}
-                  disabled={isCreating || !createFactorForm.formula.trim()}
+                  disabled={isCreating}
                 >
                   {isCreating ? '创建中...' : '创建因子'}
                 </button>
