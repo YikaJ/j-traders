@@ -1,5 +1,6 @@
 // 统一导出所有组件
 export { default as FactorLibrary } from './FactorLibrary';
+export { default as DataFieldsViewer } from './DataFieldsViewer';
 export { default as StrategyConfigManager } from './StrategyConfigManager';
 
 // Dashboard 相关组件

@@ -1,21 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ChartBarIcon
+  ChartBarIcon,
+  CircleStackIcon,
+  CubeIcon
 } from '@heroicons/react/24/outline';
 
 // 组件导入
 import FactorLibrary from '../components/FactorLibrary';
+import DataFieldsViewer from '../components/DataFieldsViewer';
 import SelectedFactorsOverview from '../components/quantitative/SelectedFactorsOverview';
 import MessageAlert from '../components/dashboard/MessageAlert';
 
 // API导入
 import {
-  SelectedFactor
+  SelectedFactor,
+  DataField
 } from '../services/api';
 
 const QuantitativeSelection: React.FC = () => {
+  // 标签页状态
+  const [activeTab, setActiveTab] = useState<'factors' | 'fields'>('factors');
+
   // 主要状态
   const [selectedFactors, setSelectedFactors] = useState<SelectedFactor[]>([]);
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
 
   // 消息状态
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', text: string } | null>(null);
@@ -46,6 +54,20 @@ const QuantitativeSelection: React.FC = () => {
     const updatedFactors = selectedFactors.filter(f => f.id !== factorId);
     setSelectedFactors(updatedFactors);
     showMessage('info', '因子已移除');
+  };
+
+  // 处理数据字段选择
+  const handleFieldSelect = (field: DataField) => {
+    const isSelected = selectedFields.includes(field.field_id);
+    if (isSelected) {
+      // 移除字段
+      setSelectedFields(prev => prev.filter(id => id !== field.field_id));
+      showMessage('info', `已移除字段: ${field.display_name}`);
+    } else {
+      // 添加字段
+      setSelectedFields(prev => [...prev, field.field_id]);
+      showMessage('success', `已添加字段: ${field.display_name}`);
+    }
   };
 
   // 更新因子权重
@@ -83,15 +105,44 @@ const QuantitativeSelection: React.FC = () => {
       {/* 顶部导航 */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div className="tabs tabs-boxed">
-          <a className="tab tab-active">
+          <a 
+            className={`tab ${activeTab === 'factors' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('factors')}
+          >
             <ChartBarIcon className="w-4 h-4 mr-2" />
             因子库
           </a>
+          <a 
+            className={`tab ${activeTab === 'fields' ? 'tab-active' : ''}`}
+            onClick={() => setActiveTab('fields')}
+          >
+            <CircleStackIcon className="w-4 h-4 mr-2" />
+            数据字段
+          </a>
+        </div>
+        
+        {/* 统计信息 */}
+        <div className="flex gap-4 text-sm">
+          {activeTab === 'factors' && (
+            <>
+              <span className="badge badge-outline">
+                已选因子: {selectedFactors.length}
+              </span>
+              <span className={`badge ${isWeightValid() ? 'badge-success' : 'badge-warning'}`}>
+                权重: {getTotalWeight().toFixed(2)}
+              </span>
+            </>
+          )}
+          {activeTab === 'fields' && (
+            <span className="badge badge-outline">
+              已选字段: {selectedFields.length}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 已选因子概览 */}
-      {selectedFactors.length > 0 && (
+      {/* 已选因子概览 - 只在因子库标签页显示 */}
+      {activeTab === 'factors' && selectedFactors.length > 0 && (
         <SelectedFactorsOverview
           selectedFactors={selectedFactors}
           currentStrategy={null}
@@ -106,11 +157,21 @@ const QuantitativeSelection: React.FC = () => {
 
       {/* 主要内容区域 */}
       <div className="min-h-[600px]">
-        <FactorLibrary
-          mode="selection"
-          onFactorSelect={handleFactorSelect}
-          selectedFactors={selectedFactors}
-        />
+        {activeTab === 'factors' && (
+          <FactorLibrary
+            mode="selection"
+            onFactorSelect={handleFactorSelect}
+            selectedFactors={selectedFactors}
+          />
+        )}
+        
+        {activeTab === 'fields' && (
+          <DataFieldsViewer
+            mode="browse"
+            onFieldSelect={handleFieldSelect}
+            selectedFields={selectedFields}
+          />
+        )}
       </div>
     </div>
   );
