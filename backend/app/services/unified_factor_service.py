@@ -14,9 +14,10 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 from sqlalchemy.orm import Session
+import uuid
 
 from app.db.database import get_db, SessionLocal
-from app.db.models.factor import Factor, FactorFormulaHistory
+from app.db.models.factor import Factor, FactorHistory
 from app.db.models.stock import Stock, StockDaily
 from app.schemas.factors import (
     FactorValidationResult,
@@ -56,38 +57,66 @@ class UnifiedFactorService:
     def get_all_factors(self, db: Session) -> List[Dict[str, Any]]:
         """获取所有因子"""
         try:
-            factors = db.query(Factor).filter(Factor.is_active == True).all()
-            return [self._factor_to_dict(factor) for factor in factors]
+            # 获取所有因子，不过滤is_active
+            factors = db.query(Factor).all()
+            logger.info(f"从数据库获取到 {len(factors)} 个因子")
+            
+            result = [self._factor_to_dict(factor) for factor in factors]
+            logger.info(f"转换后返回 {len(result)} 个因子")
+            
+            return result
         except Exception as e:
             logger.error(f"获取因子列表失败: {e}")
             return []
     
-    def get_factor_by_id(self, factor_id: str, db: Session) -> Optional[Dict[str, Any]]:
+    def get_factor_by_id(self, id: str, db: Session) -> Optional[Dict[str, Any]]:
         """根据ID获取因子"""
         try:
-            factor = db.query(Factor).filter(Factor.factor_id == factor_id).first()
+            factor = db.query(Factor).filter(Factor.id == id).first()
             if factor:
                 return self._factor_to_dict(factor)
             return None
         except Exception as e:
-            logger.error(f"获取因子 {factor_id} 失败: {e}")
+            logger.error(f"获取因子 {id} 失败: {e}")
             return None
     
     def create_factor(self, factor_data: Dict[str, Any], db: Session) -> Optional[Dict[str, Any]]:
         """创建新因子"""
         try:
-            # 检查因子ID是否已存在
-            existing = db.query(Factor).filter(Factor.factor_id == factor_data['factor_id']).first()
-            if existing:
-                raise ValueError(f"因子ID {factor_data['factor_id']} 已存在")
+            # 字段映射：将前端字段映射到数据库字段
+            db_factor_data = {}
+            
+            # 自动生成因子ID
+            factor_id = str(uuid.uuid4())
+            db_factor_data['factor_id'] = factor_id
+            
+            # 映射其他字段
+            if 'name' in factor_data:
+                db_factor_data['name'] = factor_data['name']
+            if 'display_name' in factor_data:
+                db_factor_data['display_name'] = factor_data['display_name']
+            if 'description' in factor_data:
+                db_factor_data['description'] = factor_data['description']
+            if 'category' in factor_data:
+                db_factor_data['category'] = factor_data['category']
+            if 'formula' in factor_data:
+                db_factor_data['formula'] = factor_data['formula']
+            elif 'code' in factor_data:
+                db_factor_data['formula'] = factor_data['code']
+            if 'input_fields' in factor_data:
+                db_factor_data['input_fields'] = factor_data['input_fields']
+            if 'default_parameters' in factor_data:
+                db_factor_data['default_parameters'] = factor_data['default_parameters']
+            if 'calculation_method' in factor_data:
+                db_factor_data['calculation_method'] = factor_data['calculation_method']
             
             # 验证公式
-            validation_result = self.validate_formula(factor_data['formula'])
+            validation_result = self.validate_formula(db_factor_data['formula'])
             if not validation_result['is_valid']:
-                raise ValueError(f"公式验证失败: {validation_result['error_message']}")
+                raise ValueError(f"公式验证失败: {validation_result['errors']}")
             
             # 创建因子
-            new_factor = Factor(**factor_data)
+            new_factor = Factor(**db_factor_data)
             db.add(new_factor)
             db.commit()
             db.refresh(new_factor)
@@ -107,24 +136,34 @@ class UnifiedFactorService:
             if not factor:
                 raise ValueError(f"因子 {factor_id} 不存在")
             
+            # 字段映射：将前端字段映射到数据库字段
+            db_update_data = {}
+            for key, value in update_data.items():
+                if key == 'code':
+                    db_update_data['formula'] = value
+                elif hasattr(factor, key):
+                    db_update_data[key] = value
+            
             # 如果更新了公式，验证语法
-            if 'formula' in update_data:
-                validation_result = self.validate_formula(update_data['formula'])
+            if 'formula' in db_update_data:
+                validation_result = self.validate_formula(db_update_data['formula'])
                 if not validation_result['is_valid']:
-                    raise ValueError(f"公式验证失败: {validation_result['error_message']}")
+                    raise ValueError(f"公式验证失败: {validation_result['errors']}")
                 
-                # 记录历史
-                history = FactorFormulaHistory(
-                    factor_id=factor_id,
-                    old_formula=factor.formula,
-                    new_formula=update_data['formula'],
+                # 记录公式变更历史
+                history = FactorHistory(
+                    factor_id=factor.id,
+                    old_code=factor.formula,
+                    new_code=db_update_data['formula'],
                     old_description=factor.description,
-                    new_description=update_data.get('description', factor.description)
+                    new_description=db_update_data.get('description', factor.description),
+                    changed_by=db_update_data.get('changed_by', 'system'),
+                    change_reason=db_update_data.get('change_reason', '公式更新')
                 )
                 db.add(history)
             
             # 更新字段
-            for key, value in update_data.items():
+            for key, value in db_update_data.items():
                 if hasattr(factor, key):
                     setattr(factor, key, value)
             
@@ -272,71 +311,53 @@ class UnifiedFactorService:
         
         return FactorValidationResult(is_valid=True)
     
-    def validate_formula(self, formula: str) -> Dict[str, Any]:
-        """验证因子公式"""
+    def validate_formula(self, code: str) -> Dict[str, Any]:
+        """验证因子公式语法"""
+        result = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': []
+        }
+        
+        if not code or not code.strip():
+            result['is_valid'] = False
+            result['errors'].append('公式不能为空')
+            return result
+        
+        # 检查危险关键字
+        dangerous_keywords = ['import', 'exec', 'eval', 'open', 'file', '__']
+        for keyword in dangerous_keywords:
+            if keyword in code.lower():
+                result['is_valid'] = False
+                result['errors'].append(f'公式包含危险关键字: {keyword}')
+        
+        # 检查括号匹配
+        open_parens = code.count('(')
+        close_parens = code.count(')')
+        if open_parens != close_parens:
+            result['is_valid'] = False
+            result['errors'].append('括号不匹配')
+        
+        # 检查基本语法
         try:
-            warnings = []
+            # 检查是否有常用变量
+            common_variables = ['data', 'result', 'close', 'open', 'high', 'low', 'volume']
+            has_variable = any(var in code.lower() for var in common_variables)
             
-            # 基本语法检查
-            if not formula or not formula.strip():
-                return {
-                    'is_valid': False,
-                    'error_message': "公式不能为空"
-                }
-            
-            # 检查是否包含危险操作
-            dangerous_keywords = ['exec', 'eval', '__', 'delete', 'rm ', 'os.']
-            for keyword in dangerous_keywords:
-                if keyword in formula.lower():
-                    return {
-                        'is_valid': False,
-                        'error_message': f"公式包含不安全的关键词: {keyword}"
-                    }
-            
-            # 检查括号匹配
-            open_parens = formula.count('(')
-            close_parens = formula.count(')')
-            if open_parens != close_parens:
-                return {
-                    'is_valid': False,
-                    'error_message': f"括号不匹配：开括号 {open_parens} 个，闭括号 {close_parens} 个"
-                }
-            
-            # 检查是否包含常用变量
-            common_variables = ['open', 'close', 'high', 'low', 'volume', 'vwap', 'returns']
-            has_variable = any(var in formula.lower() for var in common_variables)
+            # 尝试编译代码
+            compile(code, '<string>', 'exec')
             
             if not has_variable:
-                warnings.append("公式中似乎没有包含常用的价格或成交量变量")
-            
-            # 尝试编译（但不执行）
-            try:
-                # 直接编译公式代码
-                compile(formula, '<string>', 'exec')
+                result['warnings'].append('公式中未发现常用变量，请检查是否正确')
                 
-            except SyntaxError as e:
-                return {
-                    'is_valid': False,
-                    'error_message': f"语法错误: {str(e)}"
-                }
-            except Exception as e:
-                return {
-                    'is_valid': False,
-                    'error_message': f"编译错误: {str(e)}"
-                }
-            
-            return {
-                'is_valid': True,
-                'error_message': None,
-                'warnings': warnings
-            }
-            
+        except SyntaxError as e:
+            result['is_valid'] = False
+            result['errors'].append(f'语法错误: {str(e)}')
         except Exception as e:
-            logger.error(f"验证公式失败: {e}")
-            return {
-                'is_valid': False,
-                'error_message': f"验证过程出错: {str(e)}"
-            }
+            result['is_valid'] = False
+            result['errors'].append(f'验证失败: {str(e)}')
+        
+        return result
     
     # ==================== 因子测试功能 ====================
     
@@ -676,7 +697,7 @@ class UnifiedFactorService:
                     return cache_entry['result']
             
             # 动态执行公式
-            result = self._execute_formula(factor_info['formula'], data, parameters)
+            result = self._execute_formula(factor_info['code'], data, parameters)
             
             # 缓存结果
             self.execution_cache[cache_key] = {
@@ -693,7 +714,7 @@ class UnifiedFactorService:
             logger.error(f"计算因子 {factor_id} 失败: {e}")
             raise
     
-    def _execute_formula(self, formula: str, data: pd.DataFrame, parameters: Dict[str, Any] = None) -> Union[pd.Series, pd.DataFrame]:
+    def _execute_formula(self, code: str, data: pd.DataFrame, parameters: Dict[str, Any] = None) -> Union[pd.Series, pd.DataFrame]:
         """动态执行因子公式"""
         try:
             # 创建执行环境
@@ -707,7 +728,7 @@ class UnifiedFactorService:
             # 构建完整的执行代码
             exec_code = f"""
 def calculate_factor(data, parameters):
-{formula}
+{code}
     return result
 
 result = calculate_factor(data, parameters)
@@ -728,47 +749,43 @@ result = calculate_factor(data, parameters)
             
         except Exception as e:
             logger.error(f"执行公式失败: {e}")
-            logger.error(f"公式内容: {formula}")
+            logger.error(f"公式内容: {code}")
             logger.error(f"错误详情: {traceback.format_exc()}")
             raise ValueError(f"公式执行失败: {str(e)}")
     
     # ==================== 辅助功能 ====================
     
     def get_formula_history(self, factor_id: str, db: Session) -> List[Dict[str, Any]]:
-        """获取因子公式历史"""
+        """获取因子公式历史记录"""
         try:
-            history = db.query(FactorFormulaHistory).filter(
-                FactorFormulaHistory.factor_id == factor_id
-            ).order_by(FactorFormulaHistory.created_at.desc()).all()
+            history = db.query(FactorHistory).filter(
+                FactorHistory.factor_id == factor_id
+            ).order_by(FactorHistory.created_at.desc()).all()
             
-            return [
-                {
-                    'id': h.id,
-                    'factor_id': h.factor_id,
-                    'old_formula': h.old_formula,
-                    'new_formula': h.new_formula,
-                    'old_description': h.old_description,
-                    'new_description': h.new_description,
-                    'changed_by': h.changed_by,
-                    'change_reason': h.change_reason,
-                    'created_at': h.created_at.isoformat() if h.created_at else None
-                }
-                for h in history
-            ]
+            return [{
+                'id': h.id,
+                'factor_id': h.factor_id,
+                'old_code': h.old_code,
+                'new_code': h.new_code,
+                'old_description': h.old_description,
+                'new_description': h.new_description,
+                'changed_by': h.changed_by,
+                'change_reason': h.change_reason,
+                'created_at': h.created_at.isoformat() if h.created_at else None
+            } for h in history]
         except Exception as e:
-            logger.error(f"获取因子公式历史失败: {e}")
+            logger.error(f"获取公式历史失败: {e}")
             return []
     
     def _factor_to_dict(self, factor: Factor) -> Dict[str, Any]:
         """将因子对象转换为字典"""
         return {
-            'id': factor.id,
-            'factor_id': factor.factor_id,
+            'id': str(factor.id),  # 转换为字符串
             'name': factor.name,
             'display_name': factor.display_name,
             'description': factor.description,
             'category': factor.category,
-            'formula': factor.formula,
+            'code': factor.formula,  # 使用formula字段作为code
             'input_fields': factor.input_fields,
             'default_parameters': factor.default_parameters,
             'parameter_schema': factor.parameter_schema,
@@ -779,7 +796,7 @@ result = calculate_factor(data, parameters)
             'last_used_at': factor.last_used_at.isoformat() if factor.last_used_at else None,
             'created_at': factor.created_at.isoformat() if factor.created_at else None,
             'updated_at': factor.updated_at.isoformat() if factor.updated_at else None,
-            'version': factor.version
+            'version': factor.version,
         }
     
     def _get_cache_key(self, factor_id: str, data: pd.DataFrame, parameters: Dict[str, Any] = None) -> str:

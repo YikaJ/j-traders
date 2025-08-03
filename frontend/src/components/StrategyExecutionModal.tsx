@@ -379,10 +379,10 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
                     </thead>
                     <tbody>
                       {strategy.factors.map((factor: any) => (
-                        <tr key={factor.factor_id}>
-                          <td>{factor.factor_name}</td>
-                          <td className="font-mono text-xs">{factor.factor_id}</td>
-                          <td>{(factor.weight * 100).toFixed(1)}%</td>
+                        <tr key={factor.id}>
+                          <td className="font-medium">{factor.name}</td>
+                          <td className="font-mono text-xs">{factor.id}</td>
+                          <td className="text-right">{factor.weight.toFixed(2)}</td>
                           <td>
                             <span className={`badge badge-sm ${factor.is_enabled ? 'badge-success' : 'badge-ghost'}`}>
                               {factor.is_enabled ? '启用' : '禁用'}

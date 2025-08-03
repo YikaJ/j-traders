@@ -75,7 +75,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(f =>
         f.display_name.toLowerCase().includes(query) ||
-        f.description.toLowerCase().includes(query) ||
+        (f.description?.toLowerCase().includes(query) || false) ||
         f.name.toLowerCase().includes(query)
       );
     }
@@ -85,22 +85,33 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
 
   // 检查因子是否已选择
   const isFactorSelected = (factorId: string) => {
-    return selectedFactors.some(f => f.factor_id === factorId);
+    return selectedFactors.some(f => f.id === factorId);
   };
 
   // 处理因子选择
   const handleFactorSelect = (factor: Factor) => {
-    if (!onFactorSelect) return;
-
-    const selectedFactorConfig: SelectedFactor = {
-      factor_id: factor.factor_id,
-      name: factor.display_name,
-      parameters: factor.default_parameters || {},
-      weight: 0,
-      is_enabled: true
-    };
-
-    onFactorSelect(selectedFactorConfig);
+    if (onFactorSelect) {
+      if (isFactorSelected(factor.id)) {
+        // 取消选择：找到已选择的因子并移除
+        const selectedFactor = selectedFactors.find(f => f.id === factor.id);
+        if (selectedFactor) {
+          onFactorSelect(selectedFactor);
+        }
+      } else {
+        // 选择：创建新的 SelectedFactor 对象
+        const newSelectedFactor: SelectedFactor = {
+          id: factor.id,
+          name: factor.name,
+          display_name: factor.display_name,
+          description: factor.description,
+          category: factor.category,
+          code: factor.code,
+          weight: 1.0,
+          is_enabled: true
+        };
+        onFactorSelect(newSelectedFactor);
+      }
+    }
   };
 
   // 处理因子操作
@@ -122,6 +133,15 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
         break;
       case 'select':
         handleFactorSelect(factor);
+        break;
+      case 'remove':
+        // 移除因子：通过调用 onFactorSelect 来取消选择
+        if (onFactorSelect) {
+          const selectedFactor = selectedFactors.find(f => f.id === factor.id);
+          if (selectedFactor) {
+            onFactorSelect(selectedFactor);
+          }
+        }
         break;
     }
   };
@@ -212,7 +232,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
             onClose={() => setShowDetailModal(false)}
             onAction={handleFactorAction}
             mode={mode}
-            isSelected={isFactorSelected(selectedFactor.factor_id)}
+            isSelected={isFactorSelected(selectedFactor.id)}
           />
 
           <FactorFormulaModal
@@ -221,7 +241,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
             onClose={() => setShowFormulaModal(false)}
             onAction={handleFactorAction}
             mode={mode}
-            isSelected={isFactorSelected(selectedFactor.factor_id)}
+            isSelected={isFactorSelected(selectedFactor.id)}
           />
 
           <FactorEditModalImproved

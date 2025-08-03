@@ -20,44 +20,58 @@ const FactorEditModal: React.FC<FactorEditModalProps> = ({
   onClose,
   onUpdate
 }) => {
-  const [editingFormula, setEditingFormula] = useState(factor.formula || factor.code || '');
+  const [editingFormula, setEditingFormula] = useState(factor.code || '');
   const [editingDescription, setEditingDescription] = useState(factor.description || '');
+  const [editingInputFields, setEditingInputFields] = useState<string[]>(factor.input_fields || []);
   const [formulaValidation, setFormulaValidation] = useState<FormulaValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const hasChanges = () => {
+    const originalFormula = factor.code || '';
+    return editingFormula !== originalFormula ||
+           editingDescription !== (factor.description || '') ||
+           JSON.stringify(editingInputFields) !== JSON.stringify(factor.input_fields || []);
+  };
 
   // 验证公式
   const handleValidateFormula = async () => {
-    if (!editingFormula.trim()) return;
-    
+    if (!editingFormula.trim()) {
+      setFormulaValidation({
+        id: factor.id,
+        is_valid: false,
+        errors: ['公式不能为空']
+      });
+      return;
+    }
+
     try {
-      setIsValidating(true);
-      const result = await factorApi.validateFactorFormula(factor.factor_id, editingFormula);
+      const result = await factorApi.validateFactorFormula(factor.id, editingFormula);
       setFormulaValidation(result);
     } catch (error) {
-      console.error('验证公式失败:', error);
       setFormulaValidation({
+        id: factor.id,
         is_valid: false,
-        errors: ['验证失败，请检查网络连接'],
-        warnings: []
+        errors: ['验证失败']
       });
-    } finally {
-      setIsValidating(false);
     }
   };
 
   // 保存公式
   const handleSaveFormula = async () => {
-    if (!editingFormula.trim()) return;
+    if (!editingFormula.trim()) {
+      alert('公式不能为空');
+      return;
+    }
     
     try {
       setIsSaving(true);
       const update: FactorFormulaUpdate = {
-        formula: editingFormula,
-        description: editingDescription || undefined
+        code: editingFormula
       };
       
-      await factorApi.updateFactorFormula(factor.factor_id, update);
+      await factorApi.updateFactorFormula(factor.id, update);
       
       // 关闭编辑模态框
       onClose();
@@ -81,13 +95,16 @@ const FactorEditModal: React.FC<FactorEditModalProps> = ({
     if (!confirm('确定要重置此因子的公式到原始状态吗？')) return;
     
     try {
-      await factorApi.resetFactorFormula(factor.factor_id);
+      setIsResetting(true);
+      await factorApi.resetFactorFormula(factor.id);
       onClose();
       alert('公式已重置到原始状态');
       onUpdate();
     } catch (error) {
       console.error('重置公式失败:', error);
       alert('重置公式失败，请重试');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -107,7 +124,7 @@ const FactorEditModal: React.FC<FactorEditModalProps> = ({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="font-medium">因子ID：</span>
-                <code className="bg-base-300 px-2 py-1 rounded">{factor.factor_id}</code>
+                <code className="bg-base-300 px-2 py-1 rounded">{factor.id}</code>
               </div>
               <div>
                 <span className="font-medium">分类：</span>
@@ -215,14 +232,16 @@ const FactorEditModal: React.FC<FactorEditModalProps> = ({
           <div className="bg-base-200 p-4 rounded-lg">
             <h4 className="font-semibold mb-2">代码编写帮助</h4>
             <div className="text-xs space-y-1">
-              <div><code>def calculate_{factor.factor_id}(data):</code> - 函数定义</div>
+              <div><code>def calculate_{factor.id}(data):</code> - 函数定义</div>
               <div><code>import pandas as pd</code> - 导入pandas</div>
               <div><code>import numpy as np</code> - 导入numpy</div>
               <div><code>data['close']</code> - 收盘价数据</div>
               <div><code>data['high']</code> - 最高价数据</div>
               <div><code>data['low']</code> - 最低价数据</div>
               <div><code>data['volume']</code> - 成交量数据</div>
-              <div><code>return result</code> - 返回计算结果</div>
+              <div><code>.pct_change()</code> - 计算收益率</div>
+              <div><code>.rolling(window=20).mean()</code> - 20日移动平均</div>
+              <div><code>.rolling(window=20).std()</code> - 20日标准差</div>
             </div>
           </div>
         </div>

@@ -26,7 +26,7 @@ export { default as ThemeToggle } from './common/ThemeToggle';
 
 // 导出组件相关的类型
 export type {
-  BuiltinFactor,
+  Factor,
   SelectedFactor,
   StrategyConfig,
   WeightPreset,

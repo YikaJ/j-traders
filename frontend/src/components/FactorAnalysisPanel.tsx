@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ChartBarIcon,
   BeakerIcon,
@@ -30,21 +30,41 @@ const FactorAnalysisPanel: React.FC<FactorAnalysisPanelProps> = ({
 
   // 模拟因子数据
   const generateMockFactorData = (factorId: string) => {
-    // 这里应该从真实的股票数据中获取因子值
-    // 现在我们生成一些模拟数据用于演示
-    const dataPoints = 1000;
-    const data = [];
-    for (let i = 0; i < dataPoints; i++) {
-      // 生成不同类型的分布数据
-      if (factorId.includes('momentum')) {
-        data.push(Math.random() * 2 - 1); // 动量因子，范围 -1 到 1
-      } else if (factorId.includes('volume')) {
-        data.push(Math.random() * 5); // 价量因子，正值
-      } else {
-        data.push(Math.random() * 100); // 其他因子，0-100
-      }
+    return Array.from({ length: 100 }, (_, i) => ({
+      date: `2024-01-${String(i + 1).padStart(2, '0')}`,
+      value: Math.random() * 2 - 1,
+      percentile: Math.random() * 100
+    }));
+  };
+
+  const handleFactorAnalysis = async (selectedFactorId: string) => {
+    if (!selectedFactorId) return;
+
+    const selectedFactor = factors.find(f => f.id === selectedFactorId);
+    if (!selectedFactor) return;
+
+    // 生成模拟数据
+    const factorData: Record<string, any[]> = {};
+    factorData[selectedFactor.name] = generateMockFactorData(selectedFactor.id);
+
+    setAnalysisResults(null); // Clear previous results
+    setCorrelationMatrix(null);
+    setSelectedFactorId(selectedFactorId);
+  };
+
+  const handleCorrelationAnalysis = async () => {
+    if (factors.length < 2) {
+      alert('请至少选择两个因子进行相关性分析');
+      return;
     }
-    return data;
+
+    try {
+      const factorData = generateFactorDataDict();
+      const result = await factorAnalysisApi.calculateCorrelationMatrix(factorData);
+      setCorrelationMatrix(result.data);
+    } catch (error) {
+      console.error('相关性分析失败:', error);
+    }
   };
 
   // 生成因子数据字典
@@ -52,7 +72,7 @@ const FactorAnalysisPanel: React.FC<FactorAnalysisPanelProps> = ({
     const factorData: Record<string, number[]> = {};
     factors.forEach(factor => {
       if (factor.is_enabled) {
-        factorData[factor.factor_name] = generateMockFactorData(factor.factor_id);
+        factorData[factor.name] = generateMockFactorData(factor.id).map(d => d.value);
       }
     });
     return factorData;
@@ -64,39 +84,18 @@ const FactorAnalysisPanel: React.FC<FactorAnalysisPanelProps> = ({
 
     try {
       setLoading(true);
-      const selectedFactor = factors.find(f => f.factor_id === selectedFactorId);
+      const selectedFactor = factors.find(f => f.id === selectedFactorId);
       if (!selectedFactor) return;
 
-      const factorValues = generateMockFactorData(selectedFactorId);
+      const factorValues = generateMockFactorData(selectedFactor.id).map(d => d.value);
       const result = await factorAnalysisApi.analyzeFactorStatistics(
         factorValues,
-        selectedFactor.factor_id,
-        selectedFactor.factor_name
+        selectedFactor.id,
+        selectedFactor.name
       );
       setAnalysisResults(result);
     } catch (error) {
       console.error('统计分析失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 执行相关性分析
-  const handleCorrelationAnalysis = async () => {
-    try {
-      setLoading(true);
-      const factorData = generateFactorDataDict();
-      
-      if (Object.keys(factorData).length < 2) {
-        alert('相关性分析需要至少2个启用的因子');
-        return;
-      }
-
-      const result = await factorAnalysisApi.calculateCorrelationMatrix(factorData);
-      setCorrelationMatrix(result);
-      setAnalysisResults(result);
-    } catch (error) {
-      console.error('相关性分析失败:', error);
     } finally {
       setLoading(false);
     }
@@ -108,13 +107,13 @@ const FactorAnalysisPanel: React.FC<FactorAnalysisPanelProps> = ({
 
     try {
       setLoading(true);
-      const selectedFactor = factors.find(f => f.factor_id === selectedFactorId);
+      const selectedFactor = factors.find(f => f.id === selectedFactorId);
       if (!selectedFactor) return;
 
-      const factorValues = generateMockFactorData(selectedFactorId);
+      const factorValues = generateMockFactorData(selectedFactor.id).map(d => d.value);
       const result = await factorAnalysisApi.analyzeFactorEffectiveness(
         factorValues,
-        selectedFactor.factor_id
+        selectedFactor.id
       );
       setAnalysisResults(result);
     } catch (error) {
@@ -240,12 +239,12 @@ const FactorAnalysisPanel: React.FC<FactorAnalysisPanelProps> = ({
               <select
                 className="select select-bordered"
                 value={selectedFactorId}
-                onChange={(e) => setSelectedFactorId(e.target.value)}
+                onChange={(e) => handleFactorAnalysis(e.target.value)}
               >
                 <option value="">请选择要分析的因子</option>
                 {enabledFactors.map((factor) => (
-                  <option key={factor.factor_id} value={factor.factor_id}>
-                    {factor.factor_name}
+                  <option key={factor.id} value={factor.id}>
+                    {factor.name}
                   </option>
                 ))}
               </select>

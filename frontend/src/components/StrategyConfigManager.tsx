@@ -8,7 +8,6 @@ import {
   ArrowUpTrayIcon,
   PlayIcon,
   EyeIcon,
-  AdjustmentsHorizontalIcon,
   ChartPieIcon,
   StarIcon,
   ClockIcon
@@ -62,7 +61,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [strategiesData, templatesData, presetsData] = await Promise.all([
+      const [{data: strategiesData}, {data: templatesData}, {data: presetsData}] = await Promise.all([
         strategyConfigApi.getStrategyConfigs({ 
           sort_by: sortBy, 
           sort_order: 'desc',
@@ -110,7 +109,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
         return;
       }
 
-      const newStrategy = await strategyConfigApi.createStrategyConfig({
+      const {data: newStrategy} = await strategyConfigApi.createStrategyConfig({
         name: strategyForm.name,
         description: strategyForm.description,
         factors: strategyForm.factors,
@@ -132,7 +131,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
     if (!selectedStrategy) return;
 
     try {
-      const updatedStrategy = await strategyConfigApi.updateStrategyConfig(
+      const {data: updatedStrategy} = await strategyConfigApi.updateStrategyConfig(
         selectedStrategy.id,
         {
           name: strategyForm.name,
@@ -171,7 +170,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   // 复制策略
   const handleDuplicateStrategy = async (strategy: StrategyConfig) => {
     try {
-      const duplicatedStrategy = await strategyConfigApi.duplicateStrategyConfig(
+      const {data: duplicatedStrategy} = await strategyConfigApi.duplicateStrategyConfig(
         strategy.id,
         `${strategy.name} (副本)`
       );
@@ -185,7 +184,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   // 导出策略
   const handleExportStrategy = async (strategy: StrategyConfig) => {
     try {
-      const exportData = await strategyConfigApi.exportStrategyConfig(strategy.id);
+      const {data: exportData} = await strategyConfigApi.exportStrategyConfig(strategy.id);
       
       // 创建下载链接
       const dataStr = JSON.stringify(exportData, null, 2);
@@ -247,7 +246,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   // 应用权重预设
   const handleApplyWeightPreset = async (presetId: string) => {
     try {
-      const result = await weightApi.applyWeightPreset(strategyForm.factors, presetId);
+      const {data: result} = await weightApi.applyWeightPreset(strategyForm.factors, presetId);
       setStrategyForm({
         ...strategyForm,
         factors: result.factors
@@ -261,7 +260,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   // 优化权重
   const handleOptimizeWeights = async () => {
     try {
-      const result = await weightApi.optimizeWeights(strategyForm.factors);
+      const {data: result} = await weightApi.optimizeWeights(strategyForm.factors);
       setStrategyForm({
         ...strategyForm,
         factors: result.optimized_factors
@@ -278,7 +277,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
     setStrategyForm({
       ...strategyForm,
       factors: strategyForm.factors.map(factor =>
-        factor.factor_id === factorId ? { ...factor, weight } : factor
+        factor.id === factorId ? { ...factor, weight } : factor
       )
     });
   };
@@ -286,7 +285,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   // 应用模板
   const handleApplyTemplate = async (template: StrategyTemplate) => {
     try {
-      const strategyConfig = await templateApi.applyTemplate(template.id);
+      const {data: strategyConfig} = await templateApi.applyTemplate(template.id);
       setStrategyForm({
         name: `${template.display_name} - 策略`,
         description: strategyConfig.description,
@@ -630,9 +629,9 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
                 {strategyForm.factors.length > 0 ? (
                   <div className="space-y-2 max-h-60 overflow-y-auto">
                     {strategyForm.factors.map((factor, index) => (
-                      <div key={`${factor.factor_id}-${index}`} className="flex items-center gap-2 p-2 bg-base-200 rounded">
+                      <div key={`${factor.id}-${index}`} className="flex items-center gap-2 p-2 bg-base-200 rounded">
                         <div className="flex-1">
-                          <div className="font-medium text-sm">{factor.factor_name}</div>
+                          <div className="font-medium text-sm">{factor.name}</div>
                           <div className="text-xs text-base-content/60">
                             权重: {(factor.weight * 100).toFixed(1)}%
                           </div>

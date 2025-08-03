@@ -50,7 +50,7 @@ const SelectedFactorsOverview: React.FC<SelectedFactorsOverviewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
           {selectedFactors.map((factor, index) => (
             <div
-              key={`${factor.factor_id}-${index}`}
+              key={`${factor.id}-${index}`}
               className={`p-3 border rounded-lg ${
                 factor.is_enabled ? 'border-primary bg-primary/5' : 'border-base-300 bg-base-200'
               }`}
@@ -62,11 +62,11 @@ const SelectedFactorsOverview: React.FC<SelectedFactorsOverviewProps> = ({
                     type="checkbox"
                     className="checkbox checkbox-sm"
                     checked={factor.is_enabled}
-                    onChange={() => onFactorToggle(factor.factor_id)}
+                    onChange={() => onFactorToggle(factor.id)}
                   />
                   <button
                     className="btn btn-ghost btn-xs"
-                    onClick={() => onRemoveFactor(factor.factor_id)}
+                    onClick={() => onRemoveFactor(factor.id)}
                   >
                     ×
                   </button>
@@ -81,7 +81,7 @@ const SelectedFactorsOverview: React.FC<SelectedFactorsOverviewProps> = ({
                   max="1"
                   step="0.01"
                   value={factor.weight}
-                  onChange={(e) => onFactorWeightChange(factor.factor_id, parseFloat(e.target.value))}
+                  onChange={(e) => onFactorWeightChange(factor.id, parseFloat(e.target.value))}
                   className="range range-xs flex-1"
                   disabled={!factor.is_enabled}
                 />

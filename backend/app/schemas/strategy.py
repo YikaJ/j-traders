@@ -10,7 +10,6 @@ from datetime import datetime
 class StrategyFactor(BaseModel):
     """策略中的因子配置"""
     factor_id: str = Field(..., description="因子ID")
-    factor_name: str = Field(..., description="因子名称") 
     weight: float = Field(..., ge=0, le=1, description="权重，范围0-1")
     is_enabled: bool = Field(True, description="是否启用")
     
@@ -18,7 +17,6 @@ class StrategyFactor(BaseModel):
         schema_extra = {
             "example": {
                 "factor_id": "alpha001",
-                "factor_name": "动量因子", 
                 "weight": 0.3,
                 "is_enabled": True
             }

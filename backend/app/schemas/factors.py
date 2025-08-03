@@ -8,70 +8,99 @@ from typing import Optional, List, Any, Dict
 
 class FactorBase(BaseModel):
     """因子基础模型"""
+    id: str
     name: str
+    display_name: str
     description: Optional[str] = None
-    category: Optional[str] = None
+    category: str
     code: str
-    isActive: Optional[bool] = True
-    version: Optional[str] = "1.0"
+    input_fields: Optional[List[str]] = None
+    default_parameters: Optional[Dict[str, Any]] = None
+    parameter_schema: Optional[Dict[str, Any]] = None
+    calculation_method: Optional[str] = "custom"
+    is_active: Optional[bool] = True
+    is_builtin: Optional[bool] = False
+    usage_count: Optional[int] = 0
+    last_used_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    version: Optional[str] = "1.0.0"
 
 
-class FactorCreate(FactorBase):
+class FactorCreate(BaseModel):
     """创建因子请求模型"""
-    pass
+    id: Optional[str] = None  # 可选，后端会自动生成
+    name: str
+    display_name: str
+    description: Optional[str] = None
+    category: str
+    code: str
+    input_fields: Optional[List[str]] = None
+    default_parameters: Optional[Dict[str, Any]] = None
+    parameter_schema: Optional[Dict[str, Any]] = None
+    calculation_method: Optional[str] = "custom"
+    is_active: Optional[bool] = True
+    is_builtin: Optional[bool] = False
+    usage_count: Optional[int] = 0
+    last_used_at: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    version: Optional[str] = "1.0.0"
 
 
 class FactorUpdate(BaseModel):
     """更新因子请求模型"""
     name: Optional[str] = None
+    display_name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
     code: Optional[str] = None
-    isActive: Optional[bool] = None
+    input_fields: Optional[List[str]] = None
+    default_parameters: Optional[Dict[str, Any]] = None
+    parameter_schema: Optional[Dict[str, Any]] = None
+    calculation_method: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_builtin: Optional[bool] = None
+    version: Optional[str] = None
 
 
 class FactorResponse(FactorBase):
     """因子响应模型"""
-    id: int
-    usageCount: int
-    lastUsedAt: Optional[str] = None
-    createdAt: str
-    updatedAt: str
-    
-    class Config:
-        from_attributes = True
+    pass
 
 
 class FactorTestRequest(BaseModel):
     """因子测试请求模型"""
-    symbols: List[str]  # 测试股票代码列表
-    startDate: Optional[str] = None  # 开始日期 YYYYMMDD
-    endDate: Optional[str] = None  # 结束日期 YYYYMMDD
+    id: str
+    code: str
+    input_fields: Optional[List[str]] = None
+    parameters: Optional[Dict[str, Any]] = None
+    data: Optional[Dict[str, Any]] = None
 
 
 class FactorTestResult(BaseModel):
     """单个股票的因子测试结果"""
-    symbol: str
-    name: str
-    value: float
-    percentile: Optional[float] = None  # 百分位数
-    rank: Optional[int] = None  # 排名
+    is_valid: bool
+    errors: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
+    result: Optional[Any] = None
 
 
 class FactorTestResponse(BaseModel):
     """因子测试响应模型"""
-    success: bool
-    message: str
-    executionTime: float  # 执行时间（秒）
-    results: List[FactorTestResult]
-    statistics: Dict[str, Any]  # 统计信息
+    id: str
+    is_valid: bool
+    errors: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
+    result: Optional[Any] = None
 
 
 class FactorValidationResult(BaseModel):
     """因子代码验证结果"""
+    id: str
     is_valid: bool
-    error_message: Optional[str] = None
-    warnings: List[str] = []
+    errors: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
 
 
 # 策略相关模型
