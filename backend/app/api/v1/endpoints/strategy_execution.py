@@ -22,14 +22,14 @@ router = APIRouter()
 
 
 @router.get("/scopes", response_model=AvailableScope)
-async def get_available_scopes():
+async def get_available_scopes(db: Session = Depends(get_db)):
     """
     获取可用的股票范围选项
     
     返回可用的行业、概念、指数、市场等筛选选项
     """
     try:
-        return await strategy_execution_engine.get_available_scopes()
+        return await strategy_execution_engine.get_available_scopes(db)
     except Exception as e:
         logger.error(f"获取股票范围选项失败: {e}")
         raise HTTPException(status_code=500, detail="获取股票范围选项失败")
