@@ -127,8 +127,18 @@ const FactorEditModal: React.FC<FactorEditModalProps> = ({
                 <code className="bg-base-300 px-2 py-1 rounded">{factor.id}</code>
               </div>
               <div>
-                <span className="font-medium">分类：</span>
-                <span className="badge badge-sm ml-2">{factor.category}</span>
+                <span className="font-medium">标签：</span>
+                <div className="flex flex-wrap gap-1 ml-2">
+                  {factor.tags && factor.tags.length > 0 ? (
+                    factor.tags.map(tag => (
+                      <span key={tag.id} className="badge badge-sm" style={{ backgroundColor: tag.color }}>
+                        {tag.display_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="badge badge-sm badge-neutral">无标签</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

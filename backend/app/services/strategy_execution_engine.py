@@ -22,7 +22,7 @@ from app.schemas.strategy_execution import (
 )
 from app.schemas.strategy import SelectedStock
 from app.schemas.factors import StrategyExecutionResponse, SelectionResult as SelectionResultSchema
-from app.db.models.factor import Factor, FactorValue
+from app.db.models.factor import Factor
 from app.db.models.strategy import Strategy as StrategyModel, StrategyExecution, SelectionResult
 from app.db.models.stock import Stock, StockDaily
 from app.services.tushare_service import tushare_service

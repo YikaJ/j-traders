@@ -65,10 +65,18 @@ const FactorDetailModal: React.FC<FactorDetailModalProps> = ({
             </div>
             <div>
               <label className="label">
-                <span className="label-text font-semibold">分类</span>
+                <span className="label-text font-semibold">标签</span>
               </label>
-              <div className="badge badge-info">
-                {getCategoryDisplayName(factor.category)}
+              <div className="flex flex-wrap gap-1">
+                {factor.tags && factor.tags.length > 0 ? (
+                  factor.tags.map(tag => (
+                    <span key={tag.id} className="badge badge-info" style={{ backgroundColor: tag.color }}>
+                      {tag.display_name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-base-content/60">无标签</span>
+                )}
               </div>
             </div>
           </div>
@@ -139,7 +147,7 @@ const FactorDetailModal: React.FC<FactorDetailModalProps> = ({
           )}
 
           {/* Alpha101特殊说明 */}
-          {(factor.category === 'alpha101' || factor.category === 'alpha101_extended' || factor.category === 'alpha101_more_factors' || factor.category === 'alpha101_phase2' || factor.category === 'alpha101_phase3' || factor.category === 'alpha101_phase4') && (
+          {(factor.tags?.some(tag => tag.name.includes('alpha101')) || factor.name.includes('alpha101')) && (
             <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
               <h4 className="font-semibold mb-2 text-amber-800 dark:text-amber-200">
                 🏆 Alpha101因子说明

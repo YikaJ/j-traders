@@ -2,93 +2,123 @@
 因子相关的Pydantic模型
 """
 
-from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 
+class FactorTagBase(BaseModel):
+    """因子标签基础模型"""
+    name: str = Field(..., description="标签名称")
+    display_name: str = Field(..., description="显示名称")
+    description: Optional[str] = Field(None, description="标签描述")
+    color: Optional[str] = Field("#3B82F6", description="标签颜色")
+
+
+class FactorTagCreate(FactorTagBase):
+    """创建因子标签请求模型"""
+    pass
+
+
+class FactorTagUpdate(BaseModel):
+    """更新因子标签请求模型"""
+    display_name: Optional[str] = Field(None, description="显示名称")
+    description: Optional[str] = Field(None, description="标签描述")
+    color: Optional[str] = Field(None, description="标签颜色")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class FactorTagResponse(FactorTagBase):
+    """因子标签响应模型"""
+    id: int
+    is_active: bool
+    usage_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FactorTagRelationCreate(BaseModel):
+    """创建因子标签关联请求模型"""
+    factor_id: str = Field(..., description="因子ID")
+    tag_ids: List[int] = Field(..., description="标签ID列表")
+
+
+class FactorTagRelationResponse(BaseModel):
+    """因子标签关联响应模型"""
+    factor_id: str
+    tag_ids: List[int]
+    tags: List[FactorTagResponse]
+
+    class Config:
+        from_attributes = True
+
+
+# 现有的因子模型保持不变
 class FactorBase(BaseModel):
     """因子基础模型"""
-    id: str
-    name: str
-    display_name: str
-    description: Optional[str] = None
-    category: str
-    code: str
-    input_fields: Optional[List[str]] = None
-    default_parameters: Optional[Dict[str, Any]] = None
-    parameter_schema: Optional[Dict[str, Any]] = None
-    calculation_method: Optional[str] = "custom"
-    is_active: Optional[bool] = True
-    is_builtin: Optional[bool] = False
-    usage_count: Optional[int] = 0
-    last_used_at: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    version: Optional[str] = "1.0.0"
+    name: str = Field(..., description="因子名称")
+    display_name: str = Field(..., description="显示名称")
+    description: Optional[str] = Field(None, description="因子描述")
+    code: str = Field(..., description="因子代码")
+    input_fields: List[str] = Field(default=[], description="输入字段列表")
+    default_parameters: Dict[str, Any] = Field(default={}, description="默认参数配置")
+    parameter_schema: Optional[Dict[str, Any]] = Field(None, description="参数验证schema")
+    calculation_method: str = Field(default="custom", description="计算方法")
 
 
-class FactorCreate(BaseModel):
+class FactorCreate(FactorBase):
     """创建因子请求模型"""
-    id: Optional[str] = None  # 可选，后端会自动生成
-    name: str
-    display_name: str
-    description: Optional[str] = None
-    category: str
-    code: str
-    input_fields: Optional[List[str]] = None
-    default_parameters: Optional[Dict[str, Any]] = None
-    parameter_schema: Optional[Dict[str, Any]] = None
-    calculation_method: Optional[str] = "custom"
-    is_active: Optional[bool] = True
-    is_builtin: Optional[bool] = False
-    usage_count: Optional[int] = 0
-    last_used_at: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    version: Optional[str] = "1.0.0"
+    pass
 
 
 class FactorUpdate(BaseModel):
     """更新因子请求模型"""
-    name: Optional[str] = None
-    display_name: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    code: Optional[str] = None
-    input_fields: Optional[List[str]] = None
-    default_parameters: Optional[Dict[str, Any]] = None
-    parameter_schema: Optional[Dict[str, Any]] = None
-    calculation_method: Optional[str] = None
-    is_active: Optional[bool] = None
-    is_builtin: Optional[bool] = None
-    version: Optional[str] = None
+    name: Optional[str] = Field(None, description="因子名称")
+    display_name: Optional[str] = Field(None, description="显示名称")
+    description: Optional[str] = Field(None, description="因子描述")
+    code: Optional[str] = Field(None, description="因子代码")
+    input_fields: Optional[List[str]] = Field(None, description="输入字段列表")
+    default_parameters: Optional[Dict[str, Any]] = Field(None, description="默认参数配置")
+    parameter_schema: Optional[Dict[str, Any]] = Field(None, description="参数验证schema")
+    calculation_method: Optional[str] = Field(None, description="计算方法")
+    is_active: Optional[bool] = Field(None, description="是否启用")
 
 
 class FactorResponse(FactorBase):
     """因子响应模型"""
-    pass
+    id: str
+    is_active: bool
+    is_builtin: bool
+    usage_count: int
+    last_used_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    version: str
+    tags: Optional[List[FactorTagResponse]] = Field(default=[], description="关联的标签")
+
+    class Config:
+        from_attributes = True
 
 
 class FactorTestRequest(BaseModel):
     """因子测试请求模型"""
-    id: str
-    code: str
-    input_fields: Optional[List[str]] = None
-    parameters: Optional[Dict[str, Any]] = None
-    data: Optional[Dict[str, Any]] = None
-
-
-class FactorTestResult(BaseModel):
-    """单个股票的因子测试结果"""
-    is_valid: bool
-    errors: Optional[List[str]] = None
-    warnings: Optional[List[str]] = None
-    result: Optional[Any] = None
+    test_data: Dict[str, Any] = Field(..., description="测试数据")
+    parameters: Optional[Dict[str, Any]] = Field(default={}, description="测试参数")
 
 
 class FactorTestResponse(BaseModel):
     """因子测试响应模型"""
-    id: str
+    success: bool
+    result: Optional[Dict[str, Any]] = Field(None, description="测试结果")
+    error: Optional[str] = Field(None, description="错误信息")
+    execution_time: Optional[float] = Field(None, description="执行时间(秒)")
+
+
+class FactorTestResult(BaseModel):
+    """单个股票的因子测试结果"""
     is_valid: bool
     errors: Optional[List[str]] = None
     warnings: Optional[List[str]] = None

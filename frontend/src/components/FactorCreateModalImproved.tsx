@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   XMarkIcon,
@@ -6,8 +6,9 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
-import { factorApi, CustomFactorCreateRequest } from '../services/api';
+import { factorApi, CustomFactorCreateRequest, FactorTag } from '../services/api';
 import FieldSelector from './FieldSelector';
+import TagInput from './common/TagInput';
 
 interface FactorCreateModalImprovedProps {
   isOpen: boolean;
@@ -24,50 +25,59 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
     name: '',
     display_name: '',
     description: '',
-    category: 'custom',
     formula: '',
     input_fields: ['close'],
     default_parameters: {},
     calculation_method: 'formula',
   });
+  const [selectedTags, setSelectedTags] = useState<FactorTag[]>([]);
+  const [availableTags, setAvailableTags] = useState<FactorTag[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [isLoadingTags, setIsLoadingTags] = useState(false);
 
-  // 因子分类选项
-  const categoryOptions = [
-    {
-      value: 'custom',
-      label: '自定义因子',
-      description: '用户自定义的量化因子',
-    },
-    {
-      value: 'trend',
-      label: '趋势类因子',
-      description: '捕捉价格趋势和动量的因子',
-    },
-    {
-      value: 'momentum',
-      label: '动量类因子',
-      description: '基于价格动量的因子',
-    },
-    {
-      value: 'volume',
-      label: '成交量类因子',
-      description: '基于成交量分析的因子',
-    },
-    {
-      value: 'volatility',
-      label: '波动率类因子',
-      description: '衡量价格波动的因子',
-    },
-    {
-      value: 'value',
-      label: '估值类因子',
-      description: '基于基本面估值的因子',
-    },
-  ];
+  // 加载可用标签
+  useEffect(() => {
+    if (isOpen) {
+      loadAvailableTags();
+    }
+  }, [isOpen]);
+
+  const loadAvailableTags = async () => {
+    try {
+      setIsLoadingTags(true);
+      const tags = await factorApi.getAllFactorTags(true); // 只获取启用的标签
+      setAvailableTags(tags);
+    } catch (error) {
+      console.error('加载标签失败:', error);
+    } finally {
+      setIsLoadingTags(false);
+    }
+  };
+
+  // 创建新标签
+  const handleCreateTag = async (tagName: string): Promise<FactorTag | null> => {
+    try {
+      const newTag = await factorApi.createFactorTag({
+        name: tagName.toLowerCase().replace(/\s+/g, '_'),
+        display_name: tagName,
+        description: `用户创建的标签: ${tagName}`,
+        color: '#3B82F6', // 默认蓝色
+      });
+      
+      // 更新可用标签列表
+      setAvailableTags(prev => [...prev, newTag]);
+      
+      return newTag;
+    } catch (error) {
+      console.error('创建标签失败:', error);
+      return null;
+    }
+  };
+
+
 
   // 验证表单
   const validateForm = (): string[] => {
@@ -109,14 +119,27 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
         name: createFactorForm.name,
         display_name: createFactorForm.display_name,
         description: createFactorForm.description,
-        category: createFactorForm.category,
         code: createFactorForm.formula,  // 将formula映射为code
         input_fields: createFactorForm.input_fields,
         default_parameters: createFactorForm.default_parameters,
         calculation_method: createFactorForm.calculation_method,
       };
 
-      await factorApi.createFactor(factorData);
+      const createdFactor = await factorApi.createFactor(factorData);
+
+      // 如果有选择的标签，创建标签关联
+      if (selectedTags.length > 0) {
+        try {
+          await factorApi.createFactorTagRelations({
+            factor_id: createdFactor.id,
+            tag_ids: selectedTags.map(tag => tag.id),
+            tags: selectedTags,
+          });
+        } catch (error) {
+          console.error('创建标签关联失败:', error);
+          // 不阻止因子创建成功
+        }
+      }
 
       // 显示成功动画
       setShowSuccessAnimation(true);
@@ -140,12 +163,12 @@ const FactorCreateModalImproved: React.FC<FactorCreateModalImprovedProps> = ({
       name: '',
       display_name: '',
       description: '',
-      category: 'custom',
       formula: '',
       input_fields: ['close'],
       default_parameters: {},
       calculation_method: 'formula',
     });
+    setSelectedTags([]);
     setCurrentStep(1);
     setValidationErrors([]);
   };
@@ -350,30 +373,32 @@ ${dataAccess}
                   />
                 </div>
 
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text font-medium">因子分类</span>
-                    <span className="label-text-alt text-xs">
-                      选择合适的分类
-                    </span>
-                  </label>
-                  <select
-                    className="select select-bordered bg-base-100 focus:border-primary"
-                    value={createFactorForm.category}
-                    onChange={(e) =>
-                      setCreateFactorForm({
-                        ...createFactorForm,
-                        category: e.target.value,
-                      })
-                    }
-                  >
-                    {categoryOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+
+              </div>
+
+              {/* 因子标签选择 */}
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text font-medium">因子标签</span>
+                  <span className="label-text-alt text-xs">
+                    选择或创建标签来分类因子
+                  </span>
+                </label>
+                {isLoadingTags ? (
+                  <div className="flex items-center justify-center py-4">
+                    <span className="loading loading-spinner loading-md"></span>
+                    <span className="ml-2 text-base-content/70">加载标签中...</span>
+                  </div>
+                ) : (
+                  <TagInput
+                    tags={selectedTags}
+                    availableTags={availableTags}
+                    onTagsChange={setSelectedTags}
+                    onCreateTag={handleCreateTag}
+                    placeholder="选择或创建标签..."
+                    maxTags={5}
+                  />
+                )}
               </div>
 
               <div className="form-control">

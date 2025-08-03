@@ -18,7 +18,6 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
     name: '',
     display_name: '',
     description: '',
-    category: 'custom',
     code: '',
     input_fields: ['close', 'high', 'low', 'volume'],
     default_parameters: {},
@@ -44,7 +43,6 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
         name: createFactorForm.name,
         display_name: createFactorForm.display_name,
         description: createFactorForm.description,
-        category: createFactorForm.category,
         code: createFactorForm.code,
         input_fields: createFactorForm.input_fields,
         default_parameters: createFactorForm.default_parameters,
@@ -74,7 +72,6 @@ const FactorCreateModal: React.FC<FactorCreateModalProps> = ({
       name: '',
       display_name: '',
       description: '',
-      category: 'custom',
       code: '',
       input_fields: ['close', 'high', 'low', 'volume'],
       default_parameters: {},
@@ -168,26 +165,7 @@ def calculate_${factorId}(data):
               />
             </div>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-medium">分类</span>
-              </label>
-              <select
-                className="select select-bordered"
-                value={createFactorForm.category}
-                onChange={(e) => setCreateFactorForm({
-                  ...createFactorForm,
-                  category: e.target.value
-                })}
-              >
-                <option value="custom">自定义</option>
-                <option value="trend">趋势类</option>
-                <option value="momentum">动量类</option>
-                <option value="volume">成交量类</option>
-                <option value="volatility">波动率类</option>
-                <option value="value">估值类</option>
-              </select>
-            </div>
+
           </div>
 
           {/* 描述 */}

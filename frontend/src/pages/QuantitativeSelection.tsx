@@ -1,45 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ChartBarIcon,
-  BeakerIcon
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 
 // 组件导入
 import FactorLibrary from '../components/FactorLibrary';
-import WeightConfigPanel from '../components/WeightConfigPanel';
-import FactorAnalysisPanel from '../components/FactorAnalysisPanel';
 import SelectedFactorsOverview from '../components/quantitative/SelectedFactorsOverview';
 import MessageAlert from '../components/dashboard/MessageAlert';
 
 // API导入
 import {
-  weightApi,
-  SelectedFactor,
-  WeightPreset
+  SelectedFactor
 } from '../services/api';
 
 const QuantitativeSelection: React.FC = () => {
   // 主要状态
-  const [activeTab, setActiveTab] = useState<'factor-library' | 'weight-config' | 'factor-analysis'>('factor-library');
   const [selectedFactors, setSelectedFactors] = useState<SelectedFactor[]>([]);
-  const [, setWeightPresets] = useState<WeightPreset[]>([]);
 
   // 消息状态
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info' | 'warning', text: string } | null>(null);
-
-  // 加载初始数据
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    try {
-      const {data: presets} = await weightApi.getWeightPresets();
-      setWeightPresets(presets);
-    } catch (error) {
-      console.error('加载初始数据失败:', error);
-    }
-  };
 
   // 显示消息
   const showMessage = (type: 'success' | 'error' | 'info' | 'warning', text: string) => {
@@ -56,39 +35,15 @@ const QuantitativeSelection: React.FC = () => {
       return;
     }
 
-    // 添加因子，默认权重为等权重
-    const updatedFactors = [...selectedFactors, { ...factor, weight: 0 }];
-    
-    // 重新分配权重
-    const enabledCount = updatedFactors.filter(f => f.is_enabled).length;
-    if (enabledCount > 0) {
-      const equalWeight = 1.0 / enabledCount;
-      updatedFactors.forEach(f => {
-        if (f.is_enabled) {
-          f.weight = equalWeight;
-        }
-      });
-    }
-
+    // 添加因子
+    const updatedFactors = [...selectedFactors, { ...factor, weight: 1.0, is_enabled: true }];
     setSelectedFactors(updatedFactors);
-    showMessage('success', `已添加因子: ${factor.name}`);
+    showMessage('success', `已添加因子: ${factor.display_name}`);
   };
 
   // 移除因子
   const handleRemoveFactor = (factorId: string) => {
     const updatedFactors = selectedFactors.filter(f => f.id !== factorId);
-    
-    // 重新分配权重
-    const enabledCount = updatedFactors.filter(f => f.is_enabled).length;
-    if (enabledCount > 0) {
-      const equalWeight = 1.0 / enabledCount;
-      updatedFactors.forEach(f => {
-        if (f.is_enabled) {
-          f.weight = equalWeight;
-        }
-      });
-    }
-
     setSelectedFactors(updatedFactors);
     showMessage('info', '因子已移除');
   };
@@ -105,18 +60,6 @@ const QuantitativeSelection: React.FC = () => {
     setSelectedFactors(selectedFactors.map(factor =>
       factor.id === factorId ? { ...factor, is_enabled: !factor.is_enabled } : factor
     ));
-  };
-
-  // 标准化权重
-  const handleNormalizeWeights = async () => {
-    try {
-      const result = await weightApi.normalizeWeights(selectedFactors);
-      setSelectedFactors(Array.isArray(result) ? result : []);
-      showMessage('success', '权重已标准化');
-    } catch (error) {
-      console.error('标准化权重失败:', error);
-      showMessage('error', '标准化权重失败');
-    }
   };
 
   // 计算总权重
@@ -140,69 +83,34 @@ const QuantitativeSelection: React.FC = () => {
       {/* 顶部导航 */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div className="tabs tabs-boxed">
-          <a
-            className={`tab ${activeTab === 'factor-library' ? 'tab-active' : ''}`}
-            onClick={() => setActiveTab('factor-library')}
-          >
+          <a className="tab tab-active">
             <ChartBarIcon className="w-4 h-4 mr-2" />
             因子库
           </a>
-          {selectedFactors.length > 0 && (
-            <>
-              <a
-                className={`tab ${activeTab === 'weight-config' ? 'tab-active' : ''}`}
-                onClick={() => setActiveTab('weight-config')}
-              >
-                <BeakerIcon className="w-4 h-4 mr-2" />
-                权重配置
-              </a>
-              <a
-                className={`tab ${activeTab === 'factor-analysis' ? 'tab-active' : ''}`}
-                onClick={() => setActiveTab('factor-analysis')}
-              >
-                <BeakerIcon className="w-4 h-4 mr-2" />
-                因子分析
-              </a>
-            </>
-          )}
         </div>
       </div>
 
       {/* 已选因子概览 */}
-      <SelectedFactorsOverview
-        selectedFactors={selectedFactors}
-        currentStrategy={null}
-        isWeightValid={isWeightValid}
-        getTotalWeight={getTotalWeight}
-        onRemoveFactor={handleRemoveFactor}
-        onFactorWeightChange={handleFactorWeightChange}
-        onFactorToggle={handleFactorToggle}
-        onNormalizeWeights={handleNormalizeWeights}
-      />
+      {selectedFactors.length > 0 && (
+        <SelectedFactorsOverview
+          selectedFactors={selectedFactors}
+          currentStrategy={null}
+          isWeightValid={isWeightValid}
+          getTotalWeight={getTotalWeight}
+          onRemoveFactor={handleRemoveFactor}
+          onFactorWeightChange={handleFactorWeightChange}
+          onFactorToggle={handleFactorToggle}
+          onNormalizeWeights={() => {}}
+        />
+      )}
 
       {/* 主要内容区域 */}
       <div className="min-h-[600px]">
-        {activeTab === 'factor-library' && (
-          <FactorLibrary
-            mode="selection"
-            onFactorSelect={handleFactorSelect}
-            selectedFactors={selectedFactors}
-          />
-        )}
-
-        {activeTab === 'weight-config' && (
-          <WeightConfigPanel
-            factors={selectedFactors}
-            onFactorsChange={setSelectedFactors}
-            onClose={() => setActiveTab('factor-library')}
-          />
-        )}
-
-        {activeTab === 'factor-analysis' && (
-          <FactorAnalysisPanel
-            factors={selectedFactors}
-          />
-        )}
+        <FactorLibrary
+          mode="selection"
+          onFactorSelect={handleFactorSelect}
+          selectedFactors={selectedFactors}
+        />
       </div>
     </div>
   );

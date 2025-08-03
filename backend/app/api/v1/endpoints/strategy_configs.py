@@ -1,419 +1,373 @@
 """
-策略配置和权重预设API接口
+策略配置管理API端点
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List, Optional
-import logging
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
 from datetime import datetime
-import uuid
 
 from app.db.database import get_db
-from app.db.models.factor import WeightPreset
-from app.schemas.factors import (
-    WeightPreset as WeightPresetSchema,
-    WeightPresetCreate,
-    WeightPresetUpdate,
-    WeightValidationResult,
-    WeightOptimizationResult,
-    WeightSuggestionRequest
-)
-
-logger = logging.getLogger(__name__)
+from app.db.models.strategy import Strategy
+from app.schemas.strategy import StrategyCreate, StrategyUpdate, StrategyResponse, StrategyListResponse
 
 router = APIRouter()
 
 
-# 权重预设相关API
-@router.get("/weights/presets", response_model=List[WeightPresetSchema])
-async def get_weight_presets(
+@router.get("/", response_model=StrategyListResponse)
+async def get_strategy_configs(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    created_by: Optional[str] = None,
+    search: Optional[str] = None,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     db: Session = Depends(get_db)
 ):
-    """
-    获取权重预设列表
-    
-    Args:
-        db: 数据库会话
-    
-    Returns:
-        权重预设列表
-    """
+    """获取策略配置列表"""
     try:
-        presets = db.query(WeightPreset).all()
+        # 构建查询
+        query = db.query(Strategy)
         
-        result = []
-        for preset in presets:
-            result.append(WeightPresetSchema(
-                id=preset.id,
-                name=preset.name,
-                description=preset.description or "",
-                applicable_categories=preset.applicable_categories or [],
-                weights=preset.weights or {},
-                is_default=preset.is_default,
-                created_at=preset.created_at.isoformat() if preset.created_at else None,
-                updated_at=preset.updated_at.isoformat() if preset.updated_at else None
-            ))
+        # 过滤条件
+        if created_by:
+            query = query.filter(Strategy.created_by == created_by)
         
-        return result
-    
-    except Exception as e:
-        logger.error(f"获取权重预设失败: {e}")
-        raise HTTPException(status_code=500, detail="获取权重预设失败")
-
-
-@router.get("/weights/presets/{preset_id}", response_model=WeightPresetSchema)
-async def get_weight_preset(
-    preset_id: str,
-    db: Session = Depends(get_db)
-):
-    """
-    获取单个权重预设详情
-    
-    Args:
-        preset_id: 预设ID
-        db: 数据库会话
-    
-    Returns:
-        权重预设详情
-    """
-    try:
-        preset = db.query(WeightPreset).filter(WeightPreset.id == preset_id).first()
+        if search:
+            query = query.filter(
+                Strategy.name.contains(search) | 
+                Strategy.description.contains(search)
+            )
         
-        if not preset:
-            raise HTTPException(status_code=404, detail="权重预设不存在")
+        # 排序
+        if sort_order == "desc":
+            query = query.order_by(getattr(Strategy, sort_by).desc())
+        else:
+            query = query.order_by(getattr(Strategy, sort_by).asc())
         
-        return WeightPresetSchema(
-            id=preset.id,
-            name=preset.name,
-            description=preset.description or "",
-            applicable_categories=preset.applicable_categories or [],
-            weights=preset.weights or {},
-            is_default=preset.is_default,
-            created_at=preset.created_at.isoformat() if preset.created_at else None,
-            updated_at=preset.updated_at.isoformat() if preset.updated_at else None
+        # 分页
+        total = query.count()
+        strategies = query.offset((page - 1) * size).limit(size).all()
+        
+        return StrategyListResponse(
+            strategies=[StrategyResponse.from_orm(s) for s in strategies],
+            total=total,
+            skip=(page - 1) * size,
+            limit=size
         )
-    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取策略配置失败: {str(e)}")
+
+
+@router.get("/{strategy_id}", response_model=StrategyResponse)
+async def get_strategy_config(
+    strategy_id: str,
+    db: Session = Depends(get_db)
+):
+    """获取指定策略配置"""
+    try:
+        strategy = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not strategy:
+            raise HTTPException(status_code=404, detail="策略配置不存在")
+        
+        return StrategyResponse.from_orm(strategy)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取权重预设详情失败: {e}")
-        raise HTTPException(status_code=500, detail="获取权重预设详情失败")
+        raise HTTPException(status_code=500, detail=f"获取策略配置失败: {str(e)}")
 
 
-@router.post("/weights/presets", response_model=WeightPresetSchema)
-async def create_weight_preset(
-    preset_data: WeightPresetCreate,
+@router.post("/", response_model=StrategyResponse)
+async def create_strategy_config(
+    strategy_data: StrategyCreate,
+    created_by: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    创建权重预设
-    
-    Args:
-        preset_data: 预设数据
-        db: 数据库会话
-    
-    Returns:
-        创建的权重预设
-    """
+    """创建策略配置"""
     try:
-        # 生成预设ID
-        preset_id = f"preset_{uuid.uuid4().hex[:8]}"
+        # 检查策略ID是否已存在
+        existing = db.query(Strategy).filter(Strategy.strategy_id == strategy_data.name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="策略名称已存在")
         
-        # 创建预设
-        preset = WeightPreset(
-            id=preset_id,
-            name=preset_data.name,
-            description=preset_data.description,
-            applicable_categories=preset_data.applicable_categories,
-            weights=preset_data.weights,
-            is_default=preset_data.is_default
+        # 创建新策略
+        strategy = Strategy(
+            strategy_id=strategy_data.name,  # 使用name作为strategy_id
+            name=strategy_data.name,
+            description=strategy_data.description or "",
+            factors=strategy_data.factors,
+            filters=strategy_data.filters,
+            config=strategy_data.config,
+            is_active=True,
+            created_by=created_by,
+            execution_count=0,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
         )
         
-        # 如果设置为默认预设，需要将其他预设设为非默认
-        if preset_data.is_default:
-            db.query(WeightPreset).update({"is_default": False})
-        
-        db.add(preset)
+        db.add(strategy)
         db.commit()
-        db.refresh(preset)
+        db.refresh(strategy)
         
-        return WeightPresetSchema(
-            id=preset.id,
-            name=preset.name,
-            description=preset.description or "",
-            applicable_categories=preset.applicable_categories or [],
-            weights=preset.weights or {},
-            is_default=preset.is_default,
-            created_at=preset.created_at.isoformat() if preset.created_at else None,
-            updated_at=preset.updated_at.isoformat() if preset.updated_at else None
-        )
-    
+        return StrategyResponse.from_orm(strategy)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"创建权重预设失败: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="创建权重预设失败")
+        raise HTTPException(status_code=500, detail=f"创建策略配置失败: {str(e)}")
 
 
-@router.put("/weights/presets/{preset_id}", response_model=WeightPresetSchema)
-async def update_weight_preset(
-    preset_id: str,
-    preset_data: WeightPresetUpdate,
+@router.put("/{strategy_id}", response_model=StrategyResponse)
+async def update_strategy_config(
+    strategy_id: str,
+    strategy_data: StrategyUpdate,
     db: Session = Depends(get_db)
 ):
-    """
-    更新权重预设
-    
-    Args:
-        preset_id: 预设ID
-        preset_data: 更新数据
-        db: 数据库会话
-    
-    Returns:
-        更新后的权重预设
-    """
+    """更新策略配置"""
     try:
-        preset = db.query(WeightPreset).filter(WeightPreset.id == preset_id).first()
-        
-        if not preset:
-            raise HTTPException(status_code=404, detail="权重预设不存在")
+        strategy = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not strategy:
+            raise HTTPException(status_code=404, detail="策略配置不存在")
         
         # 更新字段
-        update_data = preset_data.dict(exclude_unset=True)
+        if strategy_data.name is not None:
+            strategy.name = strategy_data.name
+        if strategy_data.description is not None:
+            strategy.description = strategy_data.description
+        if strategy_data.factors is not None:
+            strategy.factors = strategy_data.factors
+        if strategy_data.filters is not None:
+            strategy.filters = strategy_data.filters
+        if strategy_data.config is not None:
+            strategy.config = strategy_data.config
+        if strategy_data.is_active is not None:
+            strategy.is_active = strategy_data.is_active
         
-        # 如果设置为默认预设，需要将其他预设设为非默认
-        if update_data.get("is_default", False):
-            db.query(WeightPreset).filter(WeightPreset.id != preset_id).update({"is_default": False})
-        
-        for field, value in update_data.items():
-            setattr(preset, field, value)
+        strategy.updated_at = datetime.now()
         
         db.commit()
-        db.refresh(preset)
+        db.refresh(strategy)
         
-        return WeightPresetSchema(
-            id=preset.id,
-            name=preset.name,
-            description=preset.description or "",
-            applicable_categories=preset.applicable_categories or [],
-            weights=preset.weights or {},
-            is_default=preset.is_default,
-            created_at=preset.created_at.isoformat() if preset.created_at else None,
-            updated_at=preset.updated_at.isoformat() if preset.updated_at else None
-        )
-    
+        return StrategyResponse.from_orm(strategy)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"更新权重预设失败: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="更新权重预设失败")
+        raise HTTPException(status_code=500, detail=f"更新策略配置失败: {str(e)}")
 
 
-@router.delete("/weights/presets/{preset_id}")
-async def delete_weight_preset(
-    preset_id: str,
+@router.delete("/{strategy_id}")
+async def delete_strategy_config(
+    strategy_id: str,
     db: Session = Depends(get_db)
 ):
-    """
-    删除权重预设
-    
-    Args:
-        preset_id: 预设ID
-        db: 数据库会话
-    
-    Returns:
-        删除结果
-    """
+    """删除策略配置"""
     try:
-        preset = db.query(WeightPreset).filter(WeightPreset.id == preset_id).first()
+        strategy = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not strategy:
+            raise HTTPException(status_code=404, detail="策略配置不存在")
         
-        if not preset:
-            raise HTTPException(status_code=404, detail="权重预设不存在")
-        
-        db.delete(preset)
+        db.delete(strategy)
         db.commit()
         
-        return {"success": True, "message": "权重预设删除成功"}
-    
+        return {"message": "策略配置删除成功"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"删除权重预设失败: {e}")
         db.rollback()
-        raise HTTPException(status_code=500, detail="删除权重预设失败")
+        raise HTTPException(status_code=500, detail=f"删除策略配置失败: {str(e)}")
 
 
-@router.post("/weights/validate", response_model=WeightValidationResult)
-async def validate_weights(
-    factors: List[dict],
+@router.post("/{strategy_id}/duplicate", response_model=StrategyResponse)
+async def duplicate_strategy_config(
+    strategy_id: str,
+    new_name: Optional[str] = None,
+    created_by: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    验证权重配置
-    
-    Args:
-        factors: 因子列表
-        db: 数据库会话
-    
-    Returns:
-        验证结果
-    """
+    """复制策略配置"""
     try:
-        total_weight = sum(factor.get("weight", 0) for factor in factors)
+        original = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not original:
+            raise HTTPException(status_code=404, detail="原策略配置不存在")
         
-        is_valid = abs(total_weight - 1.0) < 0.01  # 允许0.01的误差
-        message = "权重配置有效" if is_valid else f"权重总和为{total_weight:.2f}，应该为1.0"
+        # 生成新名称
+        if not new_name:
+            new_name = f"{original.name}_副本"
         
-        warnings = []
-        if not is_valid:
-            warnings.append(f"权重总和为{total_weight:.2f}，建议调整为1.0")
+        # 检查新名称是否已存在
+        existing = db.query(Strategy).filter(Strategy.strategy_id == new_name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="新策略名称已存在")
         
-        # 检查是否有负权重
-        negative_weights = [f for f in factors if f.get("weight", 0) < 0]
-        if negative_weights:
-            warnings.append("存在负权重，可能影响策略效果")
-        
-        return WeightValidationResult(
-            is_valid=is_valid,
-            total_weight=total_weight,
-            message=message,
-            warnings=warnings
+        # 创建副本
+        duplicate = Strategy(
+            strategy_id=new_name,
+            name=new_name,
+            description=original.description,
+            factors=original.factors,
+            filters=original.filters,
+            config=original.config,
+            is_active=True,
+            created_by=created_by,
+            execution_count=0,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
         )
-    
+        
+        db.add(duplicate)
+        db.commit()
+        db.refresh(duplicate)
+        
+        return StrategyResponse.from_orm(duplicate)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"验证权重失败: {e}")
-        raise HTTPException(status_code=500, detail="验证权重失败")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"复制策略配置失败: {str(e)}")
 
 
-@router.post("/weights/normalize")
-async def normalize_weights(
-    factors: List[dict],
-    target_sum: float = 1.0,
+@router.get("/{strategy_id}/export")
+async def export_strategy_config(
+    strategy_id: str,
     db: Session = Depends(get_db)
 ):
-    """
-    标准化权重
-    
-    Args:
-        factors: 因子列表
-        target_sum: 目标权重总和
-        db: 数据库会话
-    
-    Returns:
-        标准化后的因子列表
-    """
+    """导出策略配置"""
     try:
-        total_weight = sum(factor.get("weight", 0) for factor in factors)
+        strategy = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not strategy:
+            raise HTTPException(status_code=404, detail="策略配置不存在")
         
-        if total_weight == 0:
-            # 如果总权重为0，平均分配
-            equal_weight = target_sum / len(factors)
-            normalized_factors = []
-            for factor in factors:
-                normalized_factor = factor.copy()
-                normalized_factor["weight"] = equal_weight
-                normalized_factors.append(normalized_factor)
-        else:
-            # 按比例标准化
-            normalized_factors = []
-            for factor in factors:
-                normalized_factor = factor.copy()
-                normalized_factor["weight"] = (factor.get("weight", 0) / total_weight) * target_sum
-                normalized_factors.append(normalized_factor)
+        # 构建导出数据
+        export_data = {
+            "strategy_id": strategy.strategy_id,
+            "name": strategy.name,
+            "description": strategy.description,
+            "factors": strategy.factors,
+            "filters": strategy.filters,
+            "config": strategy.config,
+            "created_by": strategy.created_by,
+            "created_at": strategy.created_at.isoformat() if strategy.created_at else None,
+            "exported_at": datetime.now().isoformat()
+        }
         
-        return {"factors": normalized_factors}
-    
+        return export_data
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"标准化权重失败: {e}")
-        raise HTTPException(status_code=500, detail="标准化权重失败")
+        raise HTTPException(status_code=500, detail=f"导出策略配置失败: {str(e)}")
 
 
-@router.post("/weights/optimize", response_model=WeightOptimizationResult)
-async def optimize_weights(
-    request: WeightSuggestionRequest,
+@router.post("/import")
+async def import_strategy_config(
+    import_data: dict,
+    created_by: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    优化权重
-    
-    Args:
-        request: 优化请求
-        db: 数据库会话
-    
-    Returns:
-        优化结果
-    """
+    """导入策略配置"""
     try:
-        # 这里实现权重优化算法
-        # 目前返回简单的等权重分配
-        factors = request.factors
-        equal_weight = 1.0 / len(factors) if factors else 0
+        # 检查策略ID是否已存在
+        strategy_id = import_data.get("strategy_id") or import_data.get("name")
+        if not strategy_id:
+            raise HTTPException(status_code=400, detail="策略ID不能为空")
         
-        optimized_factors = []
-        for factor in factors:
-            optimized_factor = factor.copy()
-            optimized_factor["weight"] = equal_weight
-            optimized_factors.append(optimized_factor)
+        existing = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="策略ID已存在")
         
-        return WeightOptimizationResult(
-            optimized_factors=optimized_factors,
-            optimization_method=request.optimization_method,
-            performance_metrics={
-                "diversification_score": 0.8,
-                "volatility": 0.15,
-                "expected_return": 0.12
-            },
-            recommendations=[
-                "建议使用等权重分配",
-                "考虑因子间的相关性",
-                "定期重新平衡权重"
-            ],
-            analysis_details={
-                "factor_count": len(factors),
-                "equal_weight": equal_weight,
-                "method": "equal_weight"
-            }
+        # 创建新策略
+        strategy = Strategy(
+            strategy_id=strategy_id,
+            name=import_data.get("name", strategy_id),
+            description=import_data.get("description", ""),
+            factors=import_data.get("factors", []),
+            filters=import_data.get("filters", {}),
+            config=import_data.get("config", {}),
+            is_active=True,
+            created_by=created_by,
+            execution_count=0,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
         )
-    
+        
+        db.add(strategy)
+        db.commit()
+        db.refresh(strategy)
+        
+        return StrategyResponse.from_orm(strategy)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"优化权重失败: {e}")
-        raise HTTPException(status_code=500, detail="优化权重失败")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"导入策略配置失败: {str(e)}")
 
 
-@router.post("/weights/suggestions")
-async def get_weight_suggestions(
-    factors: List[dict],
+@router.post("/{strategy_id}/usage")
+async def record_strategy_usage(
+    strategy_id: str,
     db: Session = Depends(get_db)
 ):
-    """
-    获取权重建议
-    
-    Args:
-        factors: 因子列表
-        db: 数据库会话
-    
-    Returns:
-        权重建议
-    """
+    """记录策略使用"""
     try:
-        # 这里实现权重建议算法
-        # 目前返回简单的建议
-        suggestions = []
+        strategy = db.query(Strategy).filter(Strategy.strategy_id == strategy_id).first()
+        if not strategy:
+            raise HTTPException(status_code=404, detail="策略配置不存在")
         
-        if len(factors) == 1:
-            suggestions.append("单个因子建议权重为1.0")
-        elif len(factors) == 2:
-            suggestions.append("两个因子建议使用等权重分配")
-        else:
-            suggestions.append("多个因子建议使用等权重或基于相关性的分配")
+        strategy.execution_count += 1
+        strategy.last_executed_at = datetime.now()
+        strategy.updated_at = datetime.now()
+        
+        db.commit()
+        
+        return {"message": "使用记录已更新"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"记录策略使用失败: {str(e)}")
+
+
+@router.get("/popular")
+async def get_popular_strategies(
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    """获取热门策略"""
+    try:
+        strategies = db.query(Strategy)\
+            .filter(Strategy.is_active == True)\
+            .order_by(Strategy.execution_count.desc())\
+            .limit(limit)\
+            .all()
+        
+        return [StrategyResponse.from_orm(s) for s in strategies]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取热门策略失败: {str(e)}")
+
+
+@router.get("/statistics")
+async def get_strategy_statistics(
+    created_by: Optional[str] = None,
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db)
+):
+    """获取策略统计"""
+    try:
+        query = db.query(Strategy)
+        
+        if created_by:
+            query = query.filter(Strategy.created_by == created_by)
+        
+        total_strategies = query.count()
+        active_strategies = query.filter(Strategy.is_active == True).count()
+        total_executions = query.with_entities(db.func.sum(Strategy.execution_count)).scalar() or 0
         
         return {
-            "suggestions": suggestions,
-            "factor_count": len(factors),
-            "recommended_method": "equal_weight"
+            "total_strategies": total_strategies,
+            "active_strategies": active_strategies,
+            "total_executions": total_executions,
+            "avg_executions": total_executions / total_strategies if total_strategies > 0 else 0,
+            "days": days
         }
-    
     except Exception as e:
-        logger.error(f"获取权重建议失败: {e}")
-        raise HTTPException(status_code=500, detail="获取权重建议失败") 
+        raise HTTPException(status_code=500, detail=f"获取策略统计失败: {str(e)}") 

@@ -78,9 +78,17 @@ const FactorGrid: React.FC<FactorGridProps> = ({
                 {factor.display_name}
               </h3>
               <div className="flex gap-1 ml-2">
-                <div className={`badge badge-sm ${getCategoryBadgeClass(factor.category)}`}>
-                  {getCategoryDisplayName(factor.category)}
-                </div>
+                {factor.tags && factor.tags.length > 0 ? (
+                  factor.tags.map(tag => (
+                    <div key={tag.id} className="badge badge-sm" style={{ backgroundColor: tag.color }}>
+                      {tag.display_name}
+                    </div>
+                  ))
+                ) : (
+                  <div className="badge badge-sm badge-neutral">
+                    无标签
+                  </div>
+                )}
               </div>
             </div>
 

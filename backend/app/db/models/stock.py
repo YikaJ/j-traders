@@ -105,3 +105,5 @@ class MarketIndex(Base):
     
     def __repr__(self):
         return f"<MarketIndex(symbol='{self.symbol}', date='{self.trade_date}', close={self.close})>"
+
+

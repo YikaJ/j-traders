@@ -14,11 +14,9 @@ import {
 } from '@heroicons/react/24/outline';
 import {
   strategyConfigApi,
-  weightApi,
   templateApi,
   StrategyConfig,
   SelectedFactor,
-  WeightPreset,
   StrategyTemplate
 } from '../services/api';
 import FactorLibrary from './FactorLibrary';
@@ -34,7 +32,6 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
 }) => {
   const [strategies, setStrategies] = useState<StrategyConfig[]>([]);
   const [templates, setTemplates] = useState<StrategyTemplate[]>([]);
-  const [weightPresets, setWeightPresets] = useState<WeightPreset[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStrategy, setSelectedStrategy] = useState<StrategyConfig | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -61,19 +58,17 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const [{data: strategiesData}, {data: templatesData}, {data: presetsData}] = await Promise.all([
+      const [{data: strategiesData}, {data: templatesData}] = await Promise.all([
         strategyConfigApi.getStrategyConfigs({ 
           sort_by: sortBy, 
           sort_order: 'desc',
           search: searchQuery || undefined 
         }),
-        templateApi.getStrategyTemplates(),
-        weightApi.getWeightPresets()
+        templateApi.getStrategyTemplates()
       ]);
       
       setStrategies(strategiesData.items || []);
       setTemplates(templatesData);
-      setWeightPresets(presetsData);
     } catch (error) {
       console.error('加载策略配置失败:', error);
     } finally {
@@ -243,34 +238,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
     setShowFactorSelectionModal(true);
   };
 
-  // 应用权重预设
-  const handleApplyWeightPreset = async (presetId: string) => {
-    try {
-      const {data: result} = await weightApi.applyWeightPreset(strategyForm.factors, presetId);
-      setStrategyForm({
-        ...strategyForm,
-        factors: result.factors
-      });
-    } catch (error) {
-      console.error('应用权重预设失败:', error);
-      alert('应用权重预设失败，请重试');
-    }
-  };
 
-  // 优化权重
-  const handleOptimizeWeights = async () => {
-    try {
-      const {data: result} = await weightApi.optimizeWeights(strategyForm.factors);
-      setStrategyForm({
-        ...strategyForm,
-        factors: result.optimized_factors
-      });
-      alert('权重优化完成！');
-    } catch (error) {
-      console.error('权重优化失败:', error);
-      alert('权重优化失败，请重试');
-    }
-  };
 
   // 更新因子权重
   const handleFactorWeightChange = (factorId: string, weight: number) => {
@@ -290,7 +258,7 @@ const StrategyConfigManager: React.FC<StrategyConfigManagerProps> = ({
         name: `${template.display_name} - 策略`,
         description: strategyConfig.description,
         factors: strategyConfig.factors,
-        tags: ['template', template.category],
+        tags: ['template'],
         max_results: strategyConfig.max_results || 100
       });
       setShowTemplateModal(false);

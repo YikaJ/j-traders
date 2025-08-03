@@ -1,8 +1,6 @@
 // 统一导出所有组件
 export { default as FactorLibrary } from './FactorLibrary';
 export { default as StrategyConfigManager } from './StrategyConfigManager';
-export { default as WeightConfigPanel } from './WeightConfigPanel';
-export { default as FactorAnalysisPanel } from './FactorAnalysisPanel';
 
 // Dashboard 相关组件
 export { default as MarketIndicesCard } from './dashboard/MarketIndicesCard';
@@ -28,8 +26,5 @@ export { default as ThemeToggle } from './common/ThemeToggle';
 export type {
   Factor,
   SelectedFactor,
-  StrategyConfig,
-  WeightPreset,
-  WeightOptimizationResult,
-  CorrelationMatrix
+  StrategyConfig
 } from '../services/api';

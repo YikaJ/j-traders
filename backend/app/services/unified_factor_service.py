@@ -97,8 +97,6 @@ class UnifiedFactorService:
                 db_factor_data['display_name'] = factor_data['display_name']
             if 'description' in factor_data:
                 db_factor_data['description'] = factor_data['description']
-            if 'category' in factor_data:
-                db_factor_data['category'] = factor_data['category']
             if 'formula' in factor_data:
                 db_factor_data['formula'] = factor_data['formula']
             elif 'code' in factor_data:
@@ -784,7 +782,6 @@ result = calculate_factor(data, parameters)
             'name': factor.name,
             'display_name': factor.display_name,
             'description': factor.description,
-            'category': factor.category,
             'code': factor.formula,  # 使用formula字段作为code
             'input_fields': factor.input_fields,
             'default_parameters': factor.default_parameters,

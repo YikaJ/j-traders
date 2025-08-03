@@ -34,6 +34,39 @@ api.interceptors.response.use(
 
 // ====== 接口类型定义 ======
 
+// 因子标签相关接口
+export interface FactorTag {
+  id: number;
+  name: string;
+  display_name: string;
+  description?: string;
+  color?: string;
+  is_active: boolean;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FactorTagCreate {
+  name: string;
+  display_name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface FactorTagUpdate {
+  display_name?: string;
+  description?: string;
+  color?: string;
+  is_active?: boolean;
+}
+
+export interface FactorTagRelation {
+  factor_id: string;
+  tag_ids: number[];
+  tags: FactorTag[];
+}
+
 // 市场指数相关接口
 export interface MarketIndex {
   symbol: string;
@@ -50,7 +83,6 @@ export interface Factor {
   name: string;
   display_name: string;
   description?: string;
-  category: string;
   code: string;
   input_fields?: string[];
   default_parameters?: Record<string, any>;
@@ -63,6 +95,7 @@ export interface Factor {
   created_at?: string;
   updated_at?: string;
   version?: string;
+  tags?: FactorTag[];
 }
 
 export interface FactorCreate {
@@ -70,7 +103,6 @@ export interface FactorCreate {
   name: string;
   display_name: string;
   description?: string;
-  category: string;
   code: string;
   input_fields?: string[];
   default_parameters?: Record<string, any>;
@@ -85,7 +117,6 @@ export interface FactorUpdate {
   name?: string;
   display_name?: string;
   description?: string;
-  category?: string;
   code?: string;
   input_fields?: string[];
   default_parameters?: Record<string, any>;
@@ -148,7 +179,7 @@ export interface CustomFactorCreateRequest {
   name: string;
   display_name: string;
   description: string;
-  category: string;
+  tags?: FactorTag[];
   formula: string;
   input_fields: string[];
   default_parameters: Record<string, any>;
@@ -185,7 +216,7 @@ export interface SelectedFactor {
   name: string;
   display_name: string;
   description?: string;
-  category: string;
+  tags?: FactorTag[];
   code: string;
   weight: number;
   is_enabled: boolean;
@@ -227,31 +258,7 @@ export interface StrategyTemplate {
 }
 
 // 因子分析相关接口
-export interface FactorStatistics {
-  id: number;
-  factor_id: string;
-  factor_type: string;
-  analysis_date: string;
-  mean: number;
-  std: number;
-  min: number;
-  max: number;
-  median: number;
-  q25: number;
-  q75: number;
-  skewness: number;
-  kurtosis: number;
-  null_ratio: number;
-  effectiveness_score: number;
-}
 
-export interface CorrelationMatrix {
-  correlation_matrix: Record<string, Record<string, number>>;
-  factor_names: string[];
-  method: string;
-  sample_size: number;
-  calculation_date: string;
-}
 
 // 策略执行结果
 export interface StrategyResult {
@@ -297,20 +304,7 @@ export interface SyncResult {
 }
 
 // 权重预设相关
-export interface WeightPreset {
-  id: string;
-  name: string;
-  description: string;
-  applicable_categories: string[];
-}
 
-export interface WeightOptimizationResult {
-  optimized_factors: SelectedFactor[];
-  optimization_method: string;
-  performance_metrics: Record<string, number>;
-  recommendations: string[];
-  analysis_details: Record<string, any>;
-}
 
 
 
@@ -340,16 +334,10 @@ export const marketApi = {
 // 因子API（统一）
 export const factorApi = {
   // 获取所有因子
-  getFactors: async (category?: string, search?: string): Promise<Factor[]> => {
+  getFactors: async (search?: string): Promise<Factor[]> => {
     const params: any = {};
-    if (category) params.category = category;
     if (search) params.search = search;
     return api.get('/factors/', { params });
-  },
-
-  // 获取因子分类
-  getFactorCategories: async (): Promise<string[]> => {
-    return api.get('/factors/categories/');
   },
 
   // 获取指定因子详情
@@ -403,6 +391,39 @@ export const factorApi = {
   // 重置因子公式
   resetFactorFormula: async (factorId: string) => {
     return api.post<{ success: boolean; message: string }>(`/factors/${factorId}/reset-formula`);
+  },
+
+  // 因子标签相关API
+  // 获取因子标签列表
+  getAllFactorTags: async (isActive?: boolean): Promise<FactorTag[]> => {
+    const params: any = {};
+    if (isActive !== undefined) params.is_active = isActive;
+    return api.get('/factors/tags/', { params });
+  },
+
+  // 创建因子标签
+  createFactorTag: async (tagData: FactorTagCreate): Promise<FactorTag> => {
+    return api.post('/factors/tags/', tagData);
+  },
+
+  // 更新因子标签
+  updateFactorTag: async (tagId: number, tagData: FactorTagUpdate): Promise<FactorTag> => {
+    return api.put(`/factors/tags/${tagId}`, tagData);
+  },
+
+  // 删除因子标签
+  deleteFactorTag: async (tagId: number): Promise<{ message: string }> => {
+    return api.delete(`/factors/tags/${tagId}`);
+  },
+
+  // 创建因子标签关联
+  createFactorTagRelations: async (relationData: FactorTagRelation): Promise<FactorTagRelation> => {
+    return api.post('/factors/tags/relations/', relationData);
+  },
+
+  // 获取因子的标签
+  getFactorTags: async (factorId: string): Promise<FactorTag[]> => {
+    return api.get(`/factors/${factorId}/tags/`);
   },
 };
 
@@ -498,47 +519,7 @@ export const strategyConfigApi = {
   },
 };
 
-// 权重管理API
-export const weightApi = {
-  // 验证权重配置
-  validateWeights: async (factors: SelectedFactor[]) => {
-    return api.post('/strategy-configs/weights/validate', { factors });
-  },
 
-  // 标准化权重
-  normalizeWeights: async (factors: SelectedFactor[], targetSum: number = 1.0) => {
-    return api.post('/strategy-configs/weights/normalize', {
-      factors,
-      target_sum: targetSum
-    });
-  },
-
-  // 获取权重预设
-  getWeightPresets: async () => {
-    return api.get<WeightPreset[]>('/strategy-configs/weights/presets');
-  },
-
-  // 应用权重预设
-  applyWeightPreset: async (factors: SelectedFactor[], presetId: string) => {
-    return api.post<{ factors: SelectedFactor[] }>('/strategy-configs/weights/apply-preset', {
-      factors,
-      preset_id: presetId
-    });
-  },
-
-  // 优化权重
-  optimizeWeights: async (factors: SelectedFactor[], optimizationMethod: string = 'correlation_adjusted') => {
-    return api.post<WeightOptimizationResult>('/strategy-configs/weights/optimize', {
-      factors,
-      optimization_method: optimizationMethod
-    });
-  },
-
-  // 获取权重建议
-  getWeightSuggestions: async (factors: SelectedFactor[]) => {
-    return api.post('/strategy-configs/weights/suggestions', { factors });
-  },
-};
 
 // 策略模板和向导API
 export const templateApi = {
@@ -619,109 +600,7 @@ export const templateApi = {
   },
 };
 
-// 因子分析API
-export const factorAnalysisApi = {
-  // 分析单个因子统计特征
-  analyzeFactorStatistics: async (factorValues: number[], factorId?: string, factorName?: string) => {
-    return api.post('/factor-analysis/statistics', {
-      factor_values: factorValues,
-      factor_id: factorId,
-      factor_name: factorName
-    });
-  },
 
-  // 计算相关性矩阵
-  calculateCorrelationMatrix: async (factorData: Record<string, number[]>, method: string = 'pearson', threshold: number = 0.7) => {
-    return api.post('/factor-analysis/correlation-matrix', {
-      factor_data: factorData,
-      method,
-      threshold
-    });
-  },
-
-  // 因子聚类分析
-  performFactorClustering: async (factorData: Record<string, number[]>) => {
-    return api.post('/factor-analysis/clustering', {
-      factor_data: factorData
-    });
-  },
-
-  // 多重共线性检测
-  detectMulticollinearity: async (factorData: Record<string, number[]>) => {
-    return api.post('/factor-analysis/multicollinearity', {
-      factor_data: factorData
-    });
-  },
-
-  // 主成分分析
-  performPCA: async (factorData: Record<string, number[]>, nComponents?: number) => {
-    const params = nComponents ? { n_components: nComponents } : {};
-    return api.post('/factor-analysis/pca', { factor_data: factorData }, { params });
-  },
-
-  // 因子有效性分析
-  analyzeFactorEffectiveness: async (factorValues: number[], factorId?: string, stockMetadata?: any) => {
-    return api.post('/factor-analysis/effectiveness', {
-      factor_values: factorValues,
-      factor_id: factorId,
-      stock_metadata: stockMetadata
-    });
-  },
-
-  // 比较多个因子
-  compareFactors: async (factorData: Record<string, number[]>, analysisTypes: string[] = ['statistics', 'correlation', 'effectiveness']) => {
-    return api.post('/factor-analysis/compare-factors', {
-      factor_data: factorData,
-      analysis_types: analysisTypes
-    });
-  },
-
-  // 分位数分析
-  performQuantileAnalysis: async (factorValues: number[], stockReturns?: number[]) => {
-    return api.post('/factor-analysis/quantile-analysis', {
-      factor_values: factorValues,
-      stock_returns: stockReturns
-    });
-  },
-
-  // 因子组合有效性分析
-  analyzeCombinationEffectiveness: async (factorData: Record<string, number[]>, weights?: number[]) => {
-    return api.post('/factor-analysis/combination-effectiveness', factorData, {
-      params: weights ? { weights: weights.join(',') } : {}
-    });
-  },
-
-  // 批量因子分析
-  performBatchAnalysis: async (factorData: Record<string, number[]>, analysisTypes: string[] = ['statistics', 'correlation', 'effectiveness']) => {
-    return api.post('/factor-analysis/batch-analysis', factorData, {
-      params: { analysis_types: analysisTypes.join(',') }
-    });
-  },
-
-  // 获取因子统计历史
-  getFactorStatisticsHistory: async (factorId: string, days: number = 30) => {
-    return api.get(`/factor-analysis/statistics/history/${factorId}`, {
-      params: { days }
-    });
-  },
-
-  // 获取因子相关性历史
-  getFactorCorrelationHistory: async (factorId: string, days: number = 30) => {
-    return api.get(`/factor-analysis/correlation/history/${factorId}`, {
-      params: { days }
-    });
-  },
-
-  // 获取分析汇总
-  getAnalysisSummary: async (factorIds: string[], days: number = 7) => {
-    return api.get('/factor-analysis/analysis-summary', {
-      params: {
-        factor_ids: factorIds.join(','),
-        days
-      }
-    });
-  },
-};
 
 // 策略执行API（更新为支持新的因子系统）
 export const strategyApi = {
@@ -993,7 +872,7 @@ export interface AvailableFactor {
   factor_name: string;
   display_name: string;
   description?: string;
-  category: string;
+  tags?: FactorTag[];
   is_active: boolean;
 }
 

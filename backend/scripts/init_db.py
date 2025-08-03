@@ -38,7 +38,6 @@ async def main():
             name="测试因子",
             display_name="测试因子",
             description="这是一个用于测试的因子",
-            category="test",
             formula="import numpy as np\nimport pandas as pd\nresult = data[\"close\"].pct_change()",
             input_fields=["close"],
             default_parameters={},
@@ -48,8 +47,6 @@ async def main():
             is_builtin=False,
             usage_count=0,
             last_used_at=None,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
             version="1.0.0"
         )
         db.add(factor_obj)

@@ -107,10 +107,8 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
         description: editingDescription || undefined
       };
       
-      // 如果是自定义因子，允许修改输入字段
-      if (factor.category === 'custom') {
-        update.input_fields = editingInputFields;
-      }
+      // 允许修改输入字段
+      update.input_fields = editingInputFields;
       
       await factorApi.updateFactorFormula(factor.id.toString(), update);
       
@@ -253,8 +251,18 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
                   <span className="ml-2 font-mono text-primary">{factor.id}</span>
                 </div>
                 <div>
-                  <span className="text-base-content/70">分类:</span>
-                  <span className="ml-2">{factor.category}</span>
+                  <span className="text-base-content/70">标签:</span>
+                  <span className="ml-2">
+                    {factor.tags && factor.tags.length > 0 ? (
+                      factor.tags.map(tag => (
+                        <span key={tag.id} className="badge badge-sm mr-1" style={{ backgroundColor: tag.color }}>
+                          {tag.display_name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-base-content/60">无标签</span>
+                    )}
+                  </span>
                 </div>
                 <div>
                   <span className="text-base-content/70">名称:</span>
@@ -280,8 +288,8 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
               />
             </div>
 
-            {/* 输入字段编辑（仅限自定义因子） */}
-            {factor.category === 'custom' ? (
+            {/* 输入字段编辑 */}
+            {!factor.is_builtin ? (
               <div className="form-control">
                 <label className="label">
                   <span className="label-text font-medium">输入字段</span>

@@ -225,7 +225,6 @@ async def get_available_factors(
                 "factor_name": factor.name,
                 "display_name": factor.display_name,
                 "description": factor.description,
-                "category": factor.category,
                 "is_active": factor.is_active
             })
         

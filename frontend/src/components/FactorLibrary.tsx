@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChartBarIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { factorApi, Factor, SelectedFactor } from '../services/api';
+import { factorApi, Factor, SelectedFactor, FactorTag } from '../services/api';
 import FactorSearch from './FactorSearch';
-import FactorCategoryFilter from './FactorCategoryFilter';
 import FactorGrid from './FactorGrid';
 import FactorDetailModal from './FactorDetailModal';
 import FactorFormulaModal from './FactorFormulaModal';
@@ -25,9 +24,9 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
 }) => {
   const [factors, setFactors] = useState<Factor[]>([]);
   const [filteredFactors, setFilteredFactors] = useState<Factor[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [tags, setTags] = useState<FactorTag[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFactor, setSelectedFactor] = useState<Factor | null>(null);
   
@@ -42,14 +41,14 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
   const loadFactors = async () => {
     try {
       setLoading(true);
-      const [factorsData, categoriesData] = await Promise.all([
+      const [factorsData, tagsData] = await Promise.all([
         factorApi.getFactors(),
-        factorApi.getFactorCategories()
+        factorApi.getAllFactorTags()
       ]);
       
       setFactors(factorsData);
       setFilteredFactors(factorsData);
-      setCategories(categoriesData);
+      setTags(tagsData);
     } catch (error) {
       console.error('加载因子库失败:', error);
     } finally {
@@ -65,9 +64,12 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
   useEffect(() => {
     let filtered = factors;
 
-    // 按分类过滤
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(f => f.category === selectedCategory);
+    // 按标签过滤
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(f => {
+        const factorTags = f.tags?.map(tag => tag.name) || [];
+        return selectedTags.some(selectedTag => factorTags.includes(selectedTag));
+      });
     }
 
     // 按搜索关键词过滤
@@ -81,7 +83,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
     }
 
     setFilteredFactors(filtered);
-  }, [factors, selectedCategory, searchQuery]);
+  }, [factors, selectedTags, searchQuery]);
 
   // 检查因子是否已选择
   const isFactorSelected = (factorId: string) => {
@@ -104,7 +106,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
           name: factor.name,
           display_name: factor.display_name,
           description: factor.description,
-          category: factor.category,
+          tags: factor.tags || [],
           code: factor.code,
           weight: 1.0,
           is_enabled: true
@@ -194,12 +196,31 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
           />
-          <FactorCategoryFilter
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
-            factors={factors}
-          />
+          {/* 标签过滤器 */}
+          <div className="form-control">
+            <label className="label">
+              <span className="label-text font-medium">标签过滤</span>
+            </label>
+            <select
+              className="select select-bordered"
+              value={selectedTags.length > 0 ? selectedTags[0] : 'all'}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'all') {
+                  setSelectedTags([]);
+                } else {
+                  setSelectedTags([value]);
+                }
+              }}
+            >
+              <option value="all">所有标签</option>
+              {tags.map(tag => (
+                <option key={tag.id} value={tag.name}>
+                  {tag.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 因子网格 */}
@@ -215,7 +236,7 @@ const FactorLibrary: React.FC<FactorLibraryProps> = ({
         {filteredFactors.length === 0 && (
           <div className="text-center py-8">
             <div className="text-base-content/60">
-              {searchQuery || selectedCategory !== 'all'
+              {searchQuery || selectedTags.length > 0
                 ? '没有找到匹配的因子'
                 : '暂无可用因子'}
             </div>
