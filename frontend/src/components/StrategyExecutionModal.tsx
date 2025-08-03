@@ -10,25 +10,13 @@ interface StrategyExecutionModalProps {
 
 // 股票范围选项
 const STOCK_SCOPES = [
-  { value: 'all', label: '全部股票', description: '所有A股市场股票' },
-  { value: 'industry', label: '按行业筛选', description: '选择特定行业的股票' },
-  { value: 'concept', label: '按概念筛选', description: '选择特定概念的股票' },
-  { value: 'index', label: '指数成分股', description: '选择指数成分股' },
-  { value: 'custom', label: '自定义股票', description: '手动输入股票代码' }
-];
-
-// 市场类型选项
-const MARKET_TYPES = [
-  { value: 'all', label: '全部市场' },
-  { value: 'main', label: '主板' },
-  { value: 'sme', label: '中小板' },
-  { value: 'gem', label: '创业板' },
-  { value: 'star', label: '科创板' },
-  { value: 'bj', label: '北交所' }
+  { value: 'all', label: '全量搜索', description: '所有A股市场股票' },
+  { value: 'industry', label: '按行业搜索', description: '选择特定行业的股票' },
+  { value: 'custom', label: '自定义股票代码', description: '手动输入股票代码' }
 ];
 
 // 执行状态映射
-const STATUS_MAP = {
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
   'pending': { label: '等待执行', color: 'text-warning' },
   'running': { label: '执行中', color: 'text-info' },
   'data_fetching': { label: '数据获取中', color: 'text-info' },
@@ -56,10 +44,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
   // 执行配置状态
   const [executionConfig, setExecutionConfig] = useState({
     scope: 'all',
-    markets: ['all'],
-    industries: [],
-    concepts: [],
-    index_codes: [],
+    industries: [] as string[],
     custom_stocks: '',
     
     // 基础筛选
@@ -83,15 +68,18 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
 
   // 可用选项状态
   const [availableOptions, setAvailableOptions] = useState({
-    industries: [],
-    concepts: [],
-    indices: [],
-    markets: MARKET_TYPES
+    industries: []
   });
 
-  // 加载可用选项
+  // 重置状态
   useEffect(() => {
     if (isOpen) {
+      setCurrentStep(1);
+      setIsExecuting(false);
+      setExecutionId(null);
+      setExecutionProgress(null);
+      setExecutionLogs([]);
+      setShowLogs(false);
       loadAvailableOptions();
     }
   }, [isOpen]);
@@ -132,6 +120,8 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
       if (response.ok) {
         const options = await response.json();
         setAvailableOptions(options);
+      } else {
+        console.error('加载选项失败:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('加载选项失败:', error);
@@ -145,10 +135,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
       // 构建股票筛选条件
       const stockFilter = {
         scope: executionConfig.scope,
-        markets: executionConfig.markets.includes('all') ? null : executionConfig.markets,
         industries: executionConfig.industries.length > 0 ? executionConfig.industries : null,
-        concepts: executionConfig.concepts.length > 0 ? executionConfig.concepts : null,
-        index_codes: executionConfig.index_codes.length > 0 ? executionConfig.index_codes : null,
         custom_stocks: executionConfig.custom_stocks ? 
           executionConfig.custom_stocks.split(/[,\s]+/).filter(s => s.trim()) : null,
         
@@ -182,7 +169,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
       if (response.ok) {
         const result = await response.json();
         setExecutionId(result.execution_id);
-        setCurrentStep(3); // 跳转到执行监控页面
+        setCurrentStep(4); // 跳转到执行监控页面
       } else {
         throw new Error('执行请求失败');
       }
@@ -206,7 +193,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
       
       if (response.ok) {
         setIsExecuting(false);
-        setExecutionProgress(prev => prev ? { ...prev, status: 'cancelled' } : null);
+        setExecutionProgress((prev: any) => prev ? { ...prev, status: 'cancelled' } : null);
       }
     } catch (error) {
       console.error('取消执行失败:', error);
@@ -240,7 +227,11 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
     return new Date(timeStr).toLocaleTimeString('zh-CN');
   };
 
-  if (!isOpen) return null;
+  const formatDateTime = (dateTime: string) => {
+    return new Date(dateTime).toLocaleString('zh-CN');
+  };
+
+  if (!isOpen || !strategy) return null;
 
   return (
     <dialog className="modal modal-open">
@@ -248,7 +239,9 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-base-300">
           <h3 className="text-xl font-bold text-base-content">
-            执行策略: {strategy?.name}
+            {currentStep === 1 ? '策略详情' : 
+             currentStep === 2 ? '选择股票范围' :
+             currentStep === 3 ? '设置筛选条件' : '执行监控'}: {strategy?.name}
           </h3>
           <button
             onClick={() => {
@@ -264,7 +257,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
         {/* 步骤指示器 */}
         <div className="flex items-center justify-center mb-6">
           <div className="flex items-center space-x-2">
-            {[1, 2, 3].map((step) => (
+            {[1, 2, 3, 4].map((step) => (
               <React.Fragment key={step}>
                 <div className={`
                   w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
@@ -276,7 +269,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
                 `}>
                   {step}
                 </div>
-                {step < 3 && (
+                {step < 4 && (
                   <div className={`
                     w-12 h-0.5 transition-all duration-300
                     ${currentStep > step ? 'bg-primary' : 'bg-base-300'}
@@ -287,8 +280,145 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
           </div>
         </div>
 
-        {/* 第一步：选择股票范围 */}
+        {/* 第一步：策略详情 */}
         {currentStep === 1 && (
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h4 className="text-lg font-semibold text-base-content mb-2">策略详情</h4>
+              <p className="text-base-content/70">查看策略配置和基本信息</p>
+            </div>
+
+            {/* 基本信息 */}
+            <div className="card bg-base-200">
+              <div className="card-body">
+                <h5 className="font-medium mb-3">基本信息</h5>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-base-content/70">策略ID:</span>
+                    <span className="ml-2 font-mono">{strategy.strategy_id}</span>
+                  </div>
+                  <div>
+                    <span className="text-base-content/70">状态:</span>
+                    <span className={`ml-2 badge badge-sm ${strategy.is_active ? 'badge-success' : 'badge-error'}`}>
+                      {strategy.is_active ? '启用' : '禁用'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-base-content/70">创建时间:</span>
+                    <span className="ml-2">{formatDateTime(strategy.created_at)}</span>
+                  </div>
+                  <div>
+                    <span className="text-base-content/70">更新时间:</span>
+                    <span className="ml-2">{formatDateTime(strategy.updated_at)}</span>
+                  </div>
+                </div>
+                {strategy.description && (
+                  <div className="mt-3">
+                    <span className="text-base-content/70">描述:</span>
+                    <p className="mt-1 text-sm">{strategy.description}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 因子配置 */}
+            <div className="card bg-base-200">
+              <div className="card-body">
+                <h5 className="font-medium mb-3">因子配置 ({strategy.factors.length})</h5>
+                <div className="overflow-x-auto">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>因子名称</th>
+                        <th>因子ID</th>
+                        <th>权重</th>
+                        <th>状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {strategy.factors.map((factor: any) => (
+                        <tr key={factor.factor_id}>
+                          <td>{factor.factor_name}</td>
+                          <td className="font-mono text-xs">{factor.factor_id}</td>
+                          <td>{(factor.weight * 100).toFixed(1)}%</td>
+                          <td>
+                            <span className={`badge badge-sm ${factor.is_enabled ? 'badge-success' : 'badge-ghost'}`}>
+                              {factor.is_enabled ? '启用' : '禁用'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* 策略配置 */}
+            {strategy.config && (
+              <div className="card bg-base-200">
+                <div className="card-body">
+                  <h5 className="font-medium mb-3">策略配置</h5>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-base-content/70">最大选股数:</span>
+                      <span className="ml-2 font-medium">{strategy.config.max_results}</span>
+                    </div>
+                    <div>
+                      <span className="text-base-content/70">调仓频率:</span>
+                      <span className="ml-2 font-medium">
+                        {strategy.config.rebalance_frequency === 'daily' ? '每日' :
+                         strategy.config.rebalance_frequency === 'weekly' ? '每周' : '每月'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-base-content/70">排序方法:</span>
+                      <span className="ml-2 font-medium">{strategy.config.ranking_method}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 统计信息 */}
+            <div className="card bg-base-200">
+              <div className="card-body">
+                <h5 className="font-medium mb-3">执行统计</h5>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-base-content/70">执行次数:</span>
+                    <span className="ml-2 font-medium">{strategy.execution_count}</span>
+                  </div>
+                  {strategy.avg_execution_time && (
+                    <div>
+                      <span className="text-base-content/70">平均耗时:</span>
+                      <span className="ml-2 font-medium">{strategy.avg_execution_time.toFixed(2)}秒</span>
+                    </div>
+                  )}
+                  {strategy.last_result_count && (
+                    <div>
+                      <span className="text-base-content/70">最后选股数:</span>
+                      <span className="ml-2 font-medium">{strategy.last_result_count}只</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                className="btn btn-primary"
+                onClick={() => setCurrentStep(2)}
+                disabled={!strategy.is_active}
+              >
+                下一步：选择股票范围
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 第二步：选择股票范围 */}
+        {currentStep === 2 && (
           <div className="space-y-6">
             <div className="text-center mb-6">
               <h4 className="text-lg font-semibold text-base-content mb-2">选择股票范围</h4>
@@ -300,7 +430,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
               <label className="label">
                 <span className="label-text font-medium">股票范围</span>
               </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {STOCK_SCOPES.map((scope) => (
                   <div
                     key={scope.value}
@@ -331,44 +461,67 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
                 <label className="label">
                   <span className="label-text font-medium">选择行业</span>
                 </label>
-                <select 
-                  multiple 
-                  className="select select-bordered h-32"
-                  value={executionConfig.industries}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    setExecutionConfig({ ...executionConfig, industries: selected });
-                  }}
-                >
-                  {availableOptions.industries.map((industry: any) => (
-                    <option key={industry.code} value={industry.code}>
-                      {industry.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {executionConfig.scope === 'concept' && (
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-medium">选择概念</span>
-                </label>
-                <select 
-                  multiple 
-                  className="select select-bordered h-32"
-                  value={executionConfig.concepts}
-                  onChange={(e) => {
-                    const selected = Array.from(e.target.selectedOptions, option => option.value);
-                    setExecutionConfig({ ...executionConfig, concepts: selected });
-                  }}
-                >
-                  {availableOptions.concepts.map((concept: any) => (
-                    <option key={concept.code} value={concept.code}>
-                      {concept.name}
-                    </option>
-                  ))}
-                </select>
+                
+                {/* 多选下拉框 */}
+                <div className="dropdown w-full">
+                  <div tabIndex={0} role="button" className="btn btn-outline w-full justify-between">
+                    <span>
+                      {executionConfig.industries.length > 0 
+                        ? `已选择 ${executionConfig.industries.length} 个行业`
+                        : '请选择行业'
+                      }
+                    </span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-full max-h-64 overflow-y-auto">
+                    {availableOptions.industries.map((industry: any) => (
+                      <li key={industry.code}>
+                        <label className="cursor-pointer flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-primary checkbox-sm"
+                            checked={executionConfig.industries.includes(industry.code)}
+                            onChange={(e) => {
+                              const newIndustries = e.target.checked
+                                ? [...executionConfig.industries, industry.code]
+                                : executionConfig.industries.filter(code => code !== industry.code);
+                              setExecutionConfig({ ...executionConfig, industries: newIndustries });
+                            }}
+                          />
+                          <span>{industry.name}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                
+                {/* 已选择的行业标签 */}
+                {executionConfig.industries.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-sm text-base-content/70 mb-2">已选择的行业：</div>
+                    <div className="flex flex-wrap gap-2">
+                      {executionConfig.industries.map((industryCode: string) => {
+                        const industry = availableOptions.industries.find((i: any) => i.code === industryCode);
+                        return (
+                          <div key={industryCode} className="badge badge-primary badge-outline">
+                            {(industry as any)?.name || industryCode}
+                            <button
+                              className="ml-1"
+                              onClick={() => {
+                                const newIndustries = executionConfig.industries.filter(code => code !== industryCode);
+                                setExecutionConfig({ ...executionConfig, industries: newIndustries });
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -389,10 +542,16 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <button
+                className="btn btn-outline"
+                onClick={() => setCurrentStep(1)}
+              >
+                上一步
+              </button>
               <button
                 className="btn btn-primary"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => setCurrentStep(3)}
               >
                 下一步：筛选条件
               </button>
@@ -400,8 +559,8 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
           </div>
         )}
 
-        {/* 第二步：设置筛选条件 */}
-        {currentStep === 2 && (
+        {/* 第三步：设置筛选条件 */}
+        {currentStep === 3 && (
           <div className="space-y-6">
             <div className="text-center mb-6">
               <h4 className="text-lg font-semibold text-base-content mb-2">设置筛选条件</h4>
@@ -551,7 +710,7 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
             <div className="flex justify-between">
               <button
                 className="btn btn-outline"
-                onClick={() => setCurrentStep(1)}
+                onClick={() => setCurrentStep(2)}
               >
                 上一步
               </button>
@@ -566,8 +725,8 @@ const StrategyExecutionModal: React.FC<StrategyExecutionModalProps> = ({
           </div>
         )}
 
-        {/* 第三步：执行监控 */}
-        {currentStep === 3 && (
+        {/* 第四步：执行监控 */}
+        {currentStep === 4 && (
           <div className="space-y-6">
             <div className="text-center mb-6">
               <h4 className="text-lg font-semibold text-base-content mb-2">执行监控</h4>

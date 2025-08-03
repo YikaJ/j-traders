@@ -654,7 +654,7 @@ class StrategyExecutionEngine:
             # 阶段2: 股票筛选
             progress_tracker.start_stage("stock_filtering")
             stock_universe = await self._stage_stock_filtering(request.stock_filter, execution_date, 
-                                                              exec_logger, progress_tracker)
+                                                              exec_logger, progress_tracker, db)
             progress_tracker.complete_stage()
             execution_result.initial_stock_count = len(stock_universe)
             
@@ -726,22 +726,49 @@ class StrategyExecutionEngine:
         tracker.update_stage_progress(100.0)
     
     async def _stage_stock_filtering(self, stock_filter: StockFilter, execution_date: str,
-                                    logger: ExecutionLogger, tracker: ProgressTracker) -> List[str]:
+                                    logger: ExecutionLogger, tracker: ProgressTracker, db: Session) -> List[str]:
         """股票筛选阶段"""
         logger.log(LogLevel.INFO, "stock_filtering", f"开始股票筛选，范围: {stock_filter.scope.value}")
         
-        # 这里应该根据筛选条件获取股票列表
-        # 目前返回模拟数据
+        from app.db.models.stock import Stock
+        
+        # 根据筛选条件获取股票列表
         if stock_filter.scope == StockScope.ALL:
             # 全部股票
-            stock_codes = [f"{str(i).zfill(6)}.{'SZ' if i < 500000 else 'SH'}" 
-                          for i in range(1, 5000)]  # 模拟4999只股票
+            stocks = db.query(Stock.symbol).filter(
+                Stock.is_active == True,
+                Stock.list_status == 'L'  # 只选择上市股票
+            ).all()
+            stock_codes = [stock.symbol for stock in stocks]
+            
         elif stock_filter.scope == StockScope.INDUSTRY:
             # 按行业筛选
-            stock_codes = [f"{str(i).zfill(6)}.SZ" for i in range(1, 500)]  # 模拟499只
+            if stock_filter.industries:
+                stocks = db.query(Stock.symbol).filter(
+                    Stock.is_active == True,
+                    Stock.list_status == 'L',
+                    Stock.industry.in_(stock_filter.industries)
+                ).all()
+                stock_codes = [stock.symbol for stock in stocks]
+                logger.log(LogLevel.INFO, "stock_filtering", 
+                          f"按行业筛选: {stock_filter.industries}, 找到 {len(stock_codes)} 只股票")
+            else:
+                stock_codes = []
+                logger.log(LogLevel.WARNING, "stock_filtering", "未选择任何行业")
+                
+        elif stock_filter.scope == StockScope.CUSTOM:
+            # 自定义股票代码
+            if stock_filter.custom_stocks:
+                stock_codes = stock_filter.custom_stocks
+                logger.log(LogLevel.INFO, "stock_filtering", 
+                          f"自定义股票代码: {len(stock_codes)} 只股票")
+            else:
+                stock_codes = []
+                logger.log(LogLevel.WARNING, "stock_filtering", "未输入自定义股票代码")
         else:
-            # 其他筛选条件
-            stock_codes = [f"{str(i).zfill(6)}.SH" for i in range(600000, 600100)]  # 模拟100只
+            # 默认返回空列表
+            stock_codes = []
+            logger.log(LogLevel.WARNING, "stock_filtering", f"未知的筛选范围: {stock_filter.scope}")
         
         # 应用基础筛选条件
         filtered_codes = await self._apply_basic_filters(stock_codes, stock_filter, logger)
@@ -807,36 +834,50 @@ class StrategyExecutionEngine:
             return True
         return False
     
-    async def get_available_scopes(self) -> AvailableScope:
+    async def get_available_scopes(self, db: Session) -> AvailableScope:
         """获取可用的股票范围选项"""
-        # 这里应该从数据库或Tushare获取实际的选项
-        return AvailableScope(
-            industries=[
-                {"code": "IT", "name": "信息技术"},
-                {"code": "FIN", "name": "金融"},
-                {"code": "HC", "name": "医疗保健"},
-                {"code": "CS", "name": "消费"},
-                {"code": "IND", "name": "工业"},
-            ],
-            concepts=[
-                {"code": "AI", "name": "人工智能"},
-                {"code": "5G", "name": "5G通信"},
-                {"code": "NEW_ENERGY", "name": "新能源"},
-                {"code": "CHIP", "name": "芯片"},
-            ],
-            indices=[
-                {"code": "000001.SH", "name": "上证指数"},
-                {"code": "399001.SZ", "name": "深证成指"},
-                {"code": "399006.SZ", "name": "创业板指"},
-                {"code": "000300.SH", "name": "沪深300"},
-            ],
-            markets=[
-                {"code": "main", "name": "主板"},
-                {"code": "sme", "name": "中小板"},
-                {"code": "gem", "name": "创业板"},
-                {"code": "star", "name": "科创板"},
-            ]
-        )
+        try:
+            # 从数据库中获取所有不重复的行业
+            from sqlalchemy import distinct
+            from app.db.models.stock import Stock
+            
+            # 查询所有不重复的行业，排除空值
+            industry_results = db.query(distinct(Stock.industry)).filter(
+                Stock.industry.isnot(None),
+                Stock.industry != '',
+                Stock.is_active == True
+            ).all()
+            
+            # 转换为前端需要的格式
+            industries = []
+            for result in industry_results:
+                industry_name = result[0]  # distinct查询返回的是元组
+                if industry_name and industry_name.strip():
+                    # 使用行业名称作为code和name
+                    industries.append({
+                        "code": industry_name,
+                        "name": industry_name
+                    })
+            
+            # 按名称排序
+            industries.sort(key=lambda x: x['name'])
+            
+            return AvailableScope(
+                industries=industries,
+                concepts=[],  # 暂时为空
+                indices=[],   # 暂时为空
+                markets=[]    # 暂时为空
+            )
+            
+        except Exception as e:
+            logger.error(f"获取行业数据失败: {e}")
+            # 返回空列表作为fallback
+            return AvailableScope(
+                industries=[],
+                concepts=[],
+                indices=[],
+                markets=[]
+            )
 
 
 # 全局实例

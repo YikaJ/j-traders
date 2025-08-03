@@ -44,6 +44,12 @@ const StrategyManagement: React.FC = () => {
     setShowExecutionModal(true);
   };
 
+  // 查看策略详情
+  const handleViewStrategy = (strategy: Strategy) => {
+    setSelectedStrategy(strategy);
+    setShowExecutionModal(true);
+  };
+
   // 删除策略
   const handleDeleteStrategy = async (strategy: Strategy) => {
     if (!confirm(`确定要删除策略"${strategy.name}"吗？此操作不可撤销。`)) {
@@ -126,7 +132,7 @@ const StrategyManagement: React.FC = () => {
         <div className="card-actions justify-end">
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => setSelectedStrategy(strategy)}
+            onClick={() => handleViewStrategy(strategy)}
             title="查看详情"
           >
             <EyeIcon className="w-4 h-4" />
@@ -292,141 +298,6 @@ const StrategyManagement: React.FC = () => {
           loadStrategies();
         }}
       />
-
-      {/* 策略详情模态框 */}
-      {selectedStrategy && (
-        <div className="modal modal-open">
-          <div className="modal-box max-w-4xl">
-            <h3 className="font-bold text-lg mb-4">{selectedStrategy.name}</h3>
-            
-            {/* 基本信息 */}
-            <div className="mb-6">
-              <h4 className="font-semibold mb-2">基本信息</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-base-content/70">策略ID:</span>
-                  <span className="ml-2 font-mono">{selectedStrategy.strategy_id}</span>
-                </div>
-                <div>
-                  <span className="text-base-content/70">状态:</span>
-                  <span className={`ml-2 badge badge-sm ${selectedStrategy.is_active ? 'badge-success' : 'badge-error'}`}>
-                    {selectedStrategy.is_active ? '启用' : '禁用'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-base-content/70">创建时间:</span>
-                  <span className="ml-2">{formatDateTime(selectedStrategy.created_at)}</span>
-                </div>
-                <div>
-                  <span className="text-base-content/70">更新时间:</span>
-                  <span className="ml-2">{formatDateTime(selectedStrategy.updated_at)}</span>
-                </div>
-              </div>
-              {selectedStrategy.description && (
-                <div className="mt-3">
-                  <span className="text-base-content/70">描述:</span>
-                  <p className="mt-1 text-sm">{selectedStrategy.description}</p>
-                </div>
-              )}
-            </div>
-
-            {/* 因子配置 */}
-            <div className="mb-6">
-              <h4 className="font-semibold mb-2">因子配置</h4>
-              <div className="overflow-x-auto">
-                <table className="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>因子名称</th>
-                      <th>因子ID</th>
-                      <th>权重</th>
-                      <th>状态</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedStrategy.factors.map((factor) => (
-                      <tr key={factor.factor_id}>
-                        <td>{factor.factor_name}</td>
-                        <td className="font-mono text-xs">{factor.factor_id}</td>
-                        <td>{(factor.weight * 100).toFixed(1)}%</td>
-                        <td>
-                          <span className={`badge badge-sm ${factor.is_enabled ? 'badge-success' : 'badge-ghost'}`}>
-                            {factor.is_enabled ? '启用' : '禁用'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 策略配置 */}
-            {selectedStrategy.config && (
-              <div className="mb-6">
-                <h4 className="font-semibold mb-2">策略配置</h4>
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-base-content/70">最大选股数:</span>
-                    <span className="ml-2 font-medium">{selectedStrategy.config.max_results}</span>
-                  </div>
-                  <div>
-                    <span className="text-base-content/70">调仓频率:</span>
-                    <span className="ml-2 font-medium">
-                      {selectedStrategy.config.rebalance_frequency === 'daily' ? '每日' :
-                       selectedStrategy.config.rebalance_frequency === 'weekly' ? '每周' : '每月'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-base-content/70">排序方法:</span>
-                    <span className="ml-2 font-medium">{selectedStrategy.config.ranking_method}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 统计信息 */}
-            <div className="mb-6">
-              <h4 className="font-semibold mb-2">执行统计</h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-base-content/70">执行次数:</span>
-                  <span className="ml-2 font-medium">{selectedStrategy.execution_count}</span>
-                </div>
-                {selectedStrategy.avg_execution_time && (
-                  <div>
-                    <span className="text-base-content/70">平均耗时:</span>
-                    <span className="ml-2 font-medium">{selectedStrategy.avg_execution_time.toFixed(2)}秒</span>
-                  </div>
-                )}
-                {selectedStrategy.last_result_count && (
-                  <div>
-                    <span className="text-base-content/70">最后选股数:</span>
-                    <span className="ml-2 font-medium">{selectedStrategy.last_result_count}只</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="modal-action">
-              <button
-                className="btn"
-                onClick={() => setSelectedStrategy(null)}
-              >
-                关闭
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={() => handleExecuteStrategy(selectedStrategy)}
-                disabled={!selectedStrategy.is_active}
-              >
-                <PlayIcon className="w-4 h-4 mr-2" />
-                执行策略
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

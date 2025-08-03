@@ -6,7 +6,8 @@ import {
   StrategyFactor, 
   AvailableFactor,
   factorApi,
-  Factor
+  Factor,
+  StrategyConfig
 } from '../services/api';
 
 interface StrategyCreateModalProps {
@@ -40,7 +41,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
       max_results: 50,
       rebalance_frequency: 'weekly',
       ranking_method: 'composite'
-    }
+    } as StrategyConfig
   });
 
   // 加载可用因子
@@ -134,7 +135,7 @@ const StrategyCreateModal: React.FC<StrategyCreateModalProps> = ({
         max_results: 50,
         rebalance_frequency: 'weekly',
         ranking_method: 'composite'
-      }
+      } as StrategyConfig
     });
     setCurrentStep(1);
     setValidationErrors([]);
