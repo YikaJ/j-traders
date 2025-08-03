@@ -29,6 +29,7 @@ from app.services.tushare_service import tushare_service
 from app.services.unified_factor_service import unified_factor_service
 from app.services.cache_service import cache_service
 from app.services.enhanced_data_fetcher import enhanced_data_fetcher, RateLimitConfig
+from app.services.factor_standardizer import FactorStandardizer, StandardizationMethod
 
 logger = logging.getLogger(__name__)
 
@@ -228,14 +229,32 @@ class FactorCalculator:
         self.execution_id = execution_id
         self.logger = logger
         self.executor = ThreadPoolExecutor(max_workers=4)
+        self.standardizer = None  # 标准化处理器
+    
+    def set_standardization_config(self, method: str = 'zscore', lookback: int = 252):
+        """设置标准化配置"""
+        try:
+            standardization_method = StandardizationMethod(method)
+            self.standardizer = FactorStandardizer(standardization_method)
+            self.logger.log(LogLevel.INFO, "factor_calculation", 
+                           f"设置标准化方法: {method}, 回看期数: {lookback}")
+        except ValueError as e:
+            self.logger.log(LogLevel.WARNING, "factor_calculation", 
+                           f"无效的标准化方法: {method}, 使用默认zscore")
+            self.standardizer = FactorStandardizer(StandardizationMethod.ZSCORE)
     
     async def calculate_factors(self, strategy: Any, stock_data: pd.DataFrame) -> Tuple[Dict[str, pd.Series], List[FactorCalculationSummary]]:
         """计算所有因子"""
         factor_results = {}
         summaries = []
         
+        # 设置标准化配置
+        standardization_method = getattr(strategy, 'standardization_method', 'zscore')
+        standardization_lookback = getattr(strategy, 'standardization_lookback', 252)
+        self.set_standardization_config(standardization_method, standardization_lookback)
+        
         self.logger.log(LogLevel.INFO, "factor_calculation", 
-                       f"开始计算{len(strategy.factors)}个因子")
+                       f"开始计算{len(strategy.factors)}个因子，标准化方法: {standardization_method}")
         
         for i, factor_config in enumerate(strategy.factors):
             if not factor_config.is_enabled:
@@ -259,6 +278,17 @@ class FactorCalculator:
                 factor_values = await self._calculate_single_factor(factor_def, stock_data)
                 
                 if factor_values is not None and not factor_values.empty:
+                    # 应用因子标准化
+                    factor_values = self.apply_factor_normalization(factor_values, factor_def)
+                    
+                    # 应用标准化处理
+                    if self.standardizer:
+                        factor_values = self.standardizer.standardize_single_factor(
+                            factor_values, standardization_lookback
+                        )
+                        self.logger.log(LogLevel.INFO, "factor_calculation", 
+                                       f"因子 {id} 标准化完成")
+                    
                     factor_results[id] = factor_values
                     
                     # 统计信息
@@ -314,6 +344,96 @@ class FactorCalculator:
             self.logger.log(LogLevel.ERROR, "factor_calculation", 
                            f"因子计算执行失败: {str(e)}")
             return None
+    
+    def apply_factor_normalization(self, factor_values: pd.Series, factor_def: Any) -> pd.Series:
+        """应用因子标准化"""
+        try:
+            # 检查因子是否有自定义标准化代码
+            if hasattr(factor_def, 'normalization_code') and factor_def.normalization_code:
+                # 执行自定义标准化代码
+                normalized_values = self._execute_normalization_code(
+                    factor_def.normalization_code, factor_values
+                )
+                self.logger.log(LogLevel.INFO, "factor_calculation", 
+                               f"应用自定义标准化: {factor_def.factor_id}")
+                return normalized_values
+            
+            # 使用默认的Z-score标准化
+            normalized_values = self._apply_zscore_normalization(factor_values)
+            self.logger.log(LogLevel.INFO, "factor_calculation", 
+                           f"应用默认Z-score标准化: {factor_def.factor_id}")
+            return normalized_values
+            
+        except Exception as e:
+            self.logger.log(LogLevel.WARNING, "factor_calculation", 
+                           f"标准化失败，使用原始值: {str(e)}")
+            return factor_values
+    
+    def _execute_normalization_code(self, normalization_code: str, factor_values: pd.Series) -> pd.Series:
+        """执行自定义标准化代码"""
+        try:
+            # 准备安全的执行环境
+            safe_globals = {
+                '__builtins__': {
+                    'abs', 'all', 'any', 'bool', 'dict', 'enumerate', 'filter',
+                    'float', 'int', 'len', 'list', 'map', 'max', 'min', 'range',
+                    'round', 'set', 'sorted', 'str', 'sum', 'tuple', 'zip', 'pow'
+                },
+                'pd': pd,
+                'np': np,
+                'factor_values': factor_values
+            }
+            
+            # 执行标准化代码
+            exec(normalization_code, safe_globals)
+            
+            # 获取标准化结果
+            normalized_result = safe_globals.get('normalized_result')
+            
+            if normalized_result is not None:
+                if isinstance(normalized_result, pd.Series):
+                    return normalized_result
+                else:
+                    # 如果不是Series，尝试转换
+                    return pd.Series(normalized_result, index=factor_values.index)
+            else:
+                # 如果没有找到结果，返回原始值
+                return factor_values
+                
+        except Exception as e:
+            self.logger.log(LogLevel.WARNING, "factor_calculation", 
+                           f"执行自定义标准化代码失败: {str(e)}")
+            return factor_values
+    
+    def _apply_zscore_normalization(self, factor_values: pd.Series) -> pd.Series:
+        """应用Z-score标准化"""
+        try:
+            # 移除无效值
+            valid_values = factor_values.dropna()
+            
+            if len(valid_values) == 0:
+                return pd.Series([0.0] * len(factor_values), index=factor_values.index)
+            
+            # 计算均值和标准差
+            mean_val = valid_values.mean()
+            std_val = valid_values.std()
+            
+            # 避免除零
+            if std_val == 0:
+                return pd.Series([0.0] * len(factor_values), index=factor_values.index)
+            
+            # 进行Z-score标准化
+            normalized = (factor_values - mean_val) / std_val
+            
+            # 处理无效值
+            normalized = normalized.fillna(0.0)
+            
+            return normalized
+            
+        except Exception as e:
+            self.logger.log(LogLevel.WARNING, "factor_calculation", 
+                           f"Z-score标准化失败: {str(e)}")
+            return factor_values
     
     async def execute_single_factor(self, factor_code: str, data: pd.DataFrame) -> float:
         """执行单个因子计算"""
@@ -396,7 +516,12 @@ class StockSelector:
     async def select_stocks(self, strategy: Any, factor_results: Dict[str, pd.Series], 
                            stock_data: pd.DataFrame) -> List[SelectedStock]:
         """执行股票选择"""
-        self.logger.log(LogLevel.INFO, "ranking_selection", "开始计算综合得分和选股")
+        # 记录标准化配置
+        standardization_method = getattr(strategy, 'standardization_method', 'zscore')
+        standardization_lookback = getattr(strategy, 'standardization_lookback', 252)
+        
+        self.logger.log(LogLevel.INFO, "ranking_selection", 
+                       f"开始计算综合得分和选股，标准化方法: {standardization_method}, 回看期数: {standardization_lookback}")
         
         # 获取所有股票代码
         all_stocks = set()

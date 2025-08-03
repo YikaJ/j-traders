@@ -17,31 +17,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/fields", response_model=FactorInputFieldsResponse)
-async def get_factor_input_fields(
-    categories: Optional[List[DataFieldCategory]] = Query(None, description="数据字段分类筛选"),
-    include_common_only: bool = Query(True, description="是否只包含常用字段")
-):
-    """
-    获取因子输入字段配置
-    
-    - **categories**: 要获取的字段分类，不传则获取所有分类
-    - **include_common_only**: 是否只返回常用字段，默认为true
-    """
-    try:
-        request = FactorInputFieldsRequest(
-            categories=categories,
-            include_common_only=include_common_only
-        )
-        
-        response = data_field_service.get_available_fields(request)
-        return response
-        
-    except Exception as e:
-        logger.error(f"获取数据字段配置失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/fields/common", response_model=List[DataField])
 async def get_common_fields():
     """

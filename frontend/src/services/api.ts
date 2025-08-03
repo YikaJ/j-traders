@@ -84,6 +84,9 @@ export interface Factor {
   display_name: string;
   description?: string;
   code: string;
+  formula?: string;
+  normalization_method?: string;
+  normalization_code?: string;
   input_fields?: string[];
   default_parameters?: Record<string, any>;
   parameter_schema?: Record<string, any>;
@@ -175,15 +178,16 @@ export interface FormulaValidationResult {
 }
 
 export interface CustomFactorCreateRequest {
-  factor_id: string;
   name: string;
   display_name: string;
   description: string;
-  tags?: FactorTag[];
   formula: string;
+  normalization_method?: string;
+  normalization_code?: string;
   input_fields: string[];
   default_parameters: Record<string, any>;
   calculation_method: string;
+  tag_ids?: number[];
 }
 
 export interface FormulaHistoryEntry {
@@ -231,6 +235,8 @@ export interface StrategyConfig {
   factors: SelectedFactor[];
   filters: Record<string, any>;
   max_results: number;
+  standardization_method: 'zscore' | 'rank' | 'sign' | 'minmax' | 'robust'; // 标准化方法
+  standardization_lookback: number; // 标准化回看期数
   created_by?: string;
   tags: string[];
   last_used_at?: string;
@@ -248,6 +254,8 @@ export interface StrategyTemplate {
   category: 'value' | 'growth' | 'momentum' | 'technical' | 'quality';
   factor_configs: SelectedFactor[];
   default_weights: Record<string, number>;
+  standardization_method: 'zscore' | 'rank' | 'sign' | 'minmax' | 'robust'; // 标准化方法
+  standardization_lookback: number; // 标准化回看期数
   applicable_markets: string[];
   risk_level: 'low' | 'medium' | 'high';
   expected_return_range: string;
@@ -350,6 +358,11 @@ export const factorApi = {
     return api.post('/factors/', factorData);
   },
 
+  // 创建自定义因子（包含标准化方案）
+  createCustomFactor: async (factorData: CustomFactorCreateRequest): Promise<Factor> => {
+    return api.post('/factors/custom/', factorData);
+  },
+
   // 更新因子
   updateFactor: async (factorId: string, factorData: Partial<Factor>): Promise<Factor> => {
     return api.put(`/factors/${factorId}`, factorData);
@@ -424,6 +437,24 @@ export const factorApi = {
   // 获取因子的标签
   getFactorTags: async (factorId: string): Promise<FactorTag[]> => {
     return api.get(`/factors/${factorId}/tags/`);
+  },
+
+  // 预览因子标准化效果
+  previewNormalization: async (factorId: string, normalizationConfig: {
+    normalization_code: string;
+  }): Promise<{
+    original_values: number[];
+    normalized_values: number[];
+    method: string;
+    statistics: {
+      mean: number;
+      std: number;
+      min: number;
+      max: number;
+      median: number;
+    };
+  }> => {
+    return api.post(`/factors/${factorId}/preview-normalization`, normalizationConfig);
   },
 };
 
@@ -679,90 +710,7 @@ export const stockApi = {
   },
 };
 
-// 数据字段配置相关接口
-export interface DataField {
-  field_id: string;
-  field_name: string;
-  display_name: string;
-  description: string;
-  category: DataFieldCategory;
-  field_type: DataFieldType;
-  unit?: string;
-  is_required: boolean;
-  is_common: boolean;
-  tushare_field?: string;
-  example_value?: string;
-  validation_rules?: Record<string, any>;
-}
 
-export interface DataFieldConfig {
-  category: DataFieldCategory;
-  fields: DataField[];
-  description: string;
-}
-
-export enum DataFieldCategory {
-  PRICE = "price",
-  VOLUME = "volume", 
-  TECHNICAL = "technical",
-  FUNDAMENTAL = "fundamental",
-  DERIVED = "derived"
-}
-
-export enum DataFieldType {
-  NUMERIC = "numeric",
-  STRING = "string",
-  DATE = "date",
-  BOOLEAN = "boolean"
-}
-
-export interface FactorInputFieldsResponse {
-  categories: DataFieldConfig[];
-  total_fields: number;
-}
-
-export interface FieldValidationResult {
-  status: "valid" | "warning" | "error";
-  message: string;
-}
-
-// 数据字段配置API
-export const dataFieldApi = {
-  // 获取因子输入字段配置
-  getFactorInputFields: async (
-    categories?: DataFieldCategory[],
-    includeCommonOnly: boolean = true
-  ): Promise<FactorInputFieldsResponse> => {
-    const params: Record<string, any> = {
-      include_common_only: includeCommonOnly
-    };
-    
-    if (categories && categories.length > 0) {
-      // FastAPI需要重复参数名来处理数组
-      categories.forEach(category => {
-        if (!params.categories) params.categories = [];
-        params.categories.push(category);
-      });
-    }
-    
-    return api.get('/data/fields', { params });
-  },
-
-  // 获取常用字段
-  getCommonFields: async (): Promise<DataField[]> => {
-    return api.get('/data/fields/common');
-  },
-
-  // 根据字段ID获取字段信息
-  getFieldById: async (fieldId: string): Promise<DataField> => {
-    return api.get(`/data/fields/${fieldId}`);
-  },
-
-  // 验证字段组合
-  validateFieldCombination: async (fieldIds: string[]): Promise<FieldValidationResult> => {
-    return api.post('/data/fields/validate', fieldIds);
-  }
-};
 
 // 策略管理相关接口
 export interface StrategyFactor {

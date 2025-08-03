@@ -36,21 +36,25 @@ class DataField(BaseModel):
     is_required: bool = False        # 是否必需
     is_common: bool = True           # 是否常用
     tushare_field: Optional[str] = None  # 对应的Tushare字段名
+    tushare_api: Optional[str] = None    # 对应的Tushare API接口名
     example_value: Optional[str] = None  # 示例值
     validation_rules: Optional[Dict[str, Any]] = None  # 验证规则
-    
+    api_call_example: Optional[str] = None  # API调用示例
+
 
 class DataFieldConfig(BaseModel):
     """数据字段配置"""
     category: DataFieldCategory
-    fields: List[DataField]
+    display_name: str
     description: str
+    fields: List[DataField]
 
 
 class FactorInputFieldsRequest(BaseModel):
     """因子输入字段请求"""
     categories: Optional[List[DataFieldCategory]] = None
-    include_common_only: bool = True
+    common_only: bool = False
+    required_only: bool = False
 
 
 class FactorInputFieldsResponse(BaseModel):

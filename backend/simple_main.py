@@ -241,51 +241,6 @@ async def test_endpoint():
     return {"message": "API工作正常", "version": "1.0.0"}
 
 
-@app.get("/api/v1/data/fields", response_model=FactorInputFieldsResponse)
-async def get_factor_input_fields(
-    categories: Optional[List[DataFieldCategory]] = Query(None, description="数据字段分类筛选"),
-    include_common_only: bool = Query(True, description="是否只包含常用字段")
-):
-    """
-    获取因子输入字段配置
-    """
-    try:
-        # 筛选分类
-        if categories:
-            selected_categories = categories
-        else:
-            selected_categories = list(DataFieldCategory)
-        
-        # 构建响应数据
-        category_configs = []
-        total_fields = 0
-        
-        for category in selected_categories:
-            if category in MOCK_DATA_FIELDS:
-                fields = MOCK_DATA_FIELDS[category]
-                
-                # 根据是否只显示常用字段进行筛选
-                if include_common_only:
-                    fields = [f for f in fields if f.is_common]
-                
-                if fields:  # 只有当有字段时才添加分类
-                    category_config = DataFieldConfig(
-                        category=category,
-                        fields=fields,
-                        description=get_category_description(category)
-                    )
-                    category_configs.append(category_config)
-                    total_fields += len(fields)
-        
-        return FactorInputFieldsResponse(
-            categories=category_configs,
-            total_fields=total_fields
-        )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/v1/data/fields/common", response_model=List[DataField])
 async def get_common_fields():
     """

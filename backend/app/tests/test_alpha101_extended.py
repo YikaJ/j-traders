@@ -134,7 +134,7 @@ class TestAlpha101Extended:
         # 验证因子信息结构
         factor = factors[0]
         required_keys = ['factor_id', 'name', 'display_name', 'description', 
-                        'formula', 'input_fields', 'category']
+                        'formula', 'category']
         for key in required_keys:
             assert key in factor
         

@@ -99,12 +99,14 @@ class UnifiedFactorService:
                 db_factor_data['description'] = factor_data['description']
             if 'formula' in factor_data:
                 db_factor_data['formula'] = factor_data['formula']
-            elif 'code' in factor_data:
-                db_factor_data['formula'] = factor_data['code']
-            if 'input_fields' in factor_data:
-                db_factor_data['input_fields'] = factor_data['input_fields']
+            if 'normalization_method' in factor_data:
+                db_factor_data['normalization_method'] = factor_data['normalization_method']
+            if 'normalization_code' in factor_data:
+                db_factor_data['normalization_code'] = factor_data['normalization_code']
             if 'default_parameters' in factor_data:
                 db_factor_data['default_parameters'] = factor_data['default_parameters']
+            if 'parameter_schema' in factor_data:
+                db_factor_data['parameter_schema'] = factor_data['parameter_schema']
             if 'calculation_method' in factor_data:
                 db_factor_data['calculation_method'] = factor_data['calculation_method']
             
@@ -135,16 +137,32 @@ class UnifiedFactorService:
                 raise ValueError(f"因子 {factor_id} 不存在")
             
             # 字段映射：将前端字段映射到数据库字段
-            db_update_data = {}
-            for key, value in update_data.items():
-                if key == 'code':
-                    db_update_data['formula'] = value
-                elif hasattr(factor, key):
-                    db_update_data[key] = value
+            update_fields = {}
+            
+            if 'name' in update_data:
+                update_fields['name'] = update_data['name']
+            if 'display_name' in update_data:
+                update_fields['display_name'] = update_data['display_name']
+            if 'description' in update_data:
+                update_fields['description'] = update_data['description']
+            if 'formula' in update_data:
+                update_fields['formula'] = update_data['formula']
+            if 'normalization_method' in update_data:
+                update_fields['normalization_method'] = update_data['normalization_method']
+            if 'normalization_code' in update_data:
+                update_fields['normalization_code'] = update_data['normalization_code']
+            if 'default_parameters' in update_data:
+                update_fields['default_parameters'] = update_data['default_parameters']
+            if 'parameter_schema' in update_data:
+                update_fields['parameter_schema'] = update_data['parameter_schema']
+            if 'calculation_method' in update_data:
+                update_fields['calculation_method'] = update_data['calculation_method']
+            if 'is_active' in update_data:
+                update_fields['is_active'] = update_data['is_active']
             
             # 如果更新了公式，验证语法
-            if 'formula' in db_update_data:
-                validation_result = self.validate_formula(db_update_data['formula'])
+            if 'formula' in update_fields:
+                validation_result = self.validate_formula(update_fields['formula'])
                 if not validation_result['is_valid']:
                     raise ValueError(f"公式验证失败: {validation_result['errors']}")
                 
@@ -152,16 +170,16 @@ class UnifiedFactorService:
                 history = FactorHistory(
                     factor_id=factor.id,
                     old_code=factor.formula,
-                    new_code=db_update_data['formula'],
+                    new_code=update_fields['formula'],
                     old_description=factor.description,
-                    new_description=db_update_data.get('description', factor.description),
-                    changed_by=db_update_data.get('changed_by', 'system'),
-                    change_reason=db_update_data.get('change_reason', '公式更新')
+                    new_description=update_fields.get('description', factor.description),
+                    changed_by=update_fields.get('changed_by', 'system'),
+                    change_reason=update_fields.get('change_reason', '公式更新')
                 )
                 db.add(history)
             
             # 更新字段
-            for key, value in db_update_data.items():
+            for key, value in update_fields.items():
                 if hasattr(factor, key):
                     setattr(factor, key, value)
             
@@ -778,14 +796,16 @@ result = calculate_factor(data, parameters)
     def _factor_to_dict(self, factor: Factor) -> Dict[str, Any]:
         """将因子对象转换为字典"""
         return {
-            'id': str(factor.id),  # 转换为字符串
+            'id': factor.factor_id,
             'name': factor.name,
             'display_name': factor.display_name,
             'description': factor.description,
-            'code': factor.formula,  # 使用formula字段作为code
-            'input_fields': factor.input_fields,
-            'default_parameters': factor.default_parameters,
-            'parameter_schema': factor.parameter_schema,
+            'code': factor.formula,  # 保持向后兼容
+            'formula': factor.formula,
+            'normalization_method': factor.normalization_method,
+            'normalization_code': factor.normalization_code,
+            'default_parameters': factor.default_parameters or {},
+            'parameter_schema': factor.parameter_schema or {},
             'calculation_method': factor.calculation_method,
             'is_active': factor.is_active,
             'is_builtin': factor.is_builtin,
@@ -793,7 +813,7 @@ result = calculate_factor(data, parameters)
             'last_used_at': factor.last_used_at.isoformat() if factor.last_used_at else None,
             'created_at': factor.created_at.isoformat() if factor.created_at else None,
             'updated_at': factor.updated_at.isoformat() if factor.updated_at else None,
-            'version': factor.version,
+            'version': factor.version
         }
     
     def _get_cache_key(self, factor_id: str, data: pd.DataFrame, parameters: Dict[str, Any] = None) -> str:

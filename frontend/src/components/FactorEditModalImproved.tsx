@@ -8,7 +8,6 @@ import {
   PencilIcon
 } from '@heroicons/react/24/outline';
 import { factorApi, Factor, FactorFormulaUpdate, FormulaValidationResult } from '../services/api';
-import FieldSelector from './FieldSelector';
 
 interface FactorEditModalImprovedProps {
   factor: Factor;
@@ -26,10 +25,12 @@ const FactorEditModalImproved: React.FC<FactorEditModalImprovedProps> = ({
   const [editingFormula, setEditingFormula] = useState('');
   const [editingDescription, setEditingDescription] = useState('');
   const [editingInputFields, setEditingInputFields] = useState<string[]>([]);
+  const [editingNormalizationMethod, setEditingNormalizationMethod] = useState('');
+  const [editingNormalizationCode, setEditingNormalizationCode] = useState('');
   const [formulaValidation, setFormulaValidation] = useState<FormulaValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'basic' | 'code'>('basic');
+  const [currentTab, setCurrentTab] = useState<'basic' | 'code' | 'normalization'>('basic');
   const [hasChanges, setHasChanges] = useState(false);
 
   // 初始化表单数据
@@ -287,53 +288,6 @@ ${inputFields.map(field => `    $$${field} = data['$$${field}']`).join('\n')}
                 onChange={(e) => setEditingDescription(e.target.value)}
               />
             </div>
-
-            {/* 输入字段编辑 */}
-            {!factor.is_builtin ? (
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-medium">输入字段</span>
-                  <span className="label-text-alt text-xs">选择因子计算需要的数据字段</span>
-                </label>
-                <FieldSelector
-                  selectedFields={editingInputFields}
-                  onChange={setEditingInputFields}
-                  placeholder="请选择因子计算需要的数据字段..."
-                  showValidation={true}
-                />
-              </div>
-            ) : (
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text font-medium">输入字段</span>
-                  <span className="label-text-alt text-xs">内置因子的输入字段不可修改</span>
-                </label>
-                <div className="p-3 border border-base-300 rounded-lg bg-base-200/50">
-                  <div className="flex flex-wrap gap-2">
-                    {['close'].map((field: string) => (
-                      <span key={field} className="badge badge-outline">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 字段预览 */}
-            {editingInputFields.length > 0 && (
-              <div className="bg-info/10 border border-info/20 rounded-lg p-4">
-                <h5 className="font-semibold text-info mb-3">字段使用预览</h5>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {editingInputFields.map(field => (
-                    <div key={field} className="bg-base-100 rounded p-2 text-sm">
-                      <span className="font-mono text-primary">data['{field}']</span>
-                      <div className="text-base-content/70">{getFieldDescription(field)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
 

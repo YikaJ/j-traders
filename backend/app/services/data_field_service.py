@@ -299,26 +299,31 @@ class DataFieldService:
         return [
             DataFieldConfig(
                 category=DataFieldCategory.PRICE,
+                display_name="价格数据",
                 fields=price_fields,
                 description="股票价格相关数据字段"
             ),
             DataFieldConfig(
                 category=DataFieldCategory.VOLUME,
+                display_name="成交量数据",
                 fields=volume_fields,
                 description="成交量和成交额相关数据字段"
             ),
             DataFieldConfig(
                 category=DataFieldCategory.TECHNICAL,
+                display_name="技术指标",
                 fields=technical_fields,
                 description="技术指标相关数据字段"
             ),
             DataFieldConfig(
                 category=DataFieldCategory.FUNDAMENTAL,
+                display_name="基本面数据",
                 fields=fundamental_fields,
                 description="基本面分析相关数据字段"
             ),
             DataFieldConfig(
                 category=DataFieldCategory.DERIVED,
+                display_name="衍生数据",
                 fields=derived_fields,
                 description="基于基础数据计算的衍生字段"
             )
@@ -344,6 +349,7 @@ class DataFieldService:
                 if fields:  # 只包含有字段的配置
                     filtered_config = DataFieldConfig(
                         category=config.category,
+                        display_name=config.display_name,
                         fields=fields,
                         description=config.description
                     )
