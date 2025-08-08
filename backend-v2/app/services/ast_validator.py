@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 from typing import List, Set, Tuple
 
@@ -59,7 +60,6 @@ class FactorAstValidator:
                 if name in banned_call_names:
                     self._error(errors, f"call to '{name}' is banned")
             if isinstance(node, (ast.Attribute,)):
-                # rough reflection guard
                 if isinstance(node.value, ast.Name) and node.value.id in {"__builtins__", "__loader__", "__spec__"}:
                     self._error(errors, "access to builtin/loader/spec is banned")
 
@@ -70,25 +70,38 @@ class FactorAstValidator:
             return func.attr
         return None
 
+    def _extract_subscript_key(self, node: ast.Subscript) -> str | None:
+        sl = node.slice
+        # Python 3.9+ typically uses ast.Constant for string index
+        if isinstance(sl, ast.Constant) and isinstance(sl.value, str):
+            return sl.value
+        # Older AST had ast.Index
+        if hasattr(ast, "Index") and isinstance(sl, ast.Index):  # type: ignore[attr-defined]
+            inner = sl.value  # type: ignore[assignment]
+            if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+                return inner.value
+        # Python 3.13 sometimes shows ast.Name due to source parsing quirks in our here-doc
+        if isinstance(sl, ast.Name):
+            return sl.id
+        return None
+
     def _extract_fields_used(self, tree: ast.AST) -> List[str]:
-        # Heuristic: look for string constants that look like field names, and DataFrame column access via df['col']
         fields: Set[str] = set()
+        # 1) df['col'] style
         for node in ast.walk(tree):
             if isinstance(node, ast.Subscript):
-                # pattern: something['field']
-                try:
-                    if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
-                        fields.add(node.slice.value)
-                except Exception:
-                    pass
-            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                # ignore long strings (likely docstrings)
-                if 0 < len(node.value) <= 64 and "\n" not in node.value:
-                    fields.add(node.value)
+                key = self._extract_subscript_key(node)
+                if isinstance(key, str):
+                    fields.add(key)
+            # 2) df.get('col') style
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+                if node.args:
+                    arg0 = node.args[0]
+                    if isinstance(arg0, ast.Constant) and isinstance(arg0.value, str):
+                        fields.add(arg0.value)
         return sorted(fields)
 
     def _check_signature(self, tree: ast.AST, errors: List[str]) -> None:
-        # must define def compute_factor(data, params)
         found = False
         for node in tree.body:  # type: ignore[attr-defined]
             if isinstance(node, ast.FunctionDef) and node.name == "compute_factor":
