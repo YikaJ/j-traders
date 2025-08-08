@@ -34,22 +34,28 @@ class TuShareClient:
 
     def fetch(self, endpoint_meta: EndpointMeta, params: Dict[str, Any]) -> pd.DataFrame:
         namespace = f"tushare:{endpoint_meta.name}"
-        cached_df = self.cache.get(namespace, params)
-        if cached_df is not None:
-            return cached_df
+        use_cache = getattr(endpoint_meta, "cache_enabled", True)
+        use_rate_limit = getattr(endpoint_meta, "rate_limit_enabled", True)
+
+        if use_cache:
+            cached_df = self.cache.get(namespace, params)
+            if cached_df is not None:
+                return cached_df
 
         # retry with exponential backoff
         last_exc: Optional[Exception] = None
         for attempt in range(3):
             try:
-                self.bucket.acquire()
+                if use_rate_limit:
+                    self.bucket.acquire()
                 pro = self._ensure_sdk()
                 method_name = endpoint_meta.sdk.get("method")
                 if not method_name:
                     raise RuntimeError("endpoint sdk.method missing")
                 method = getattr(pro, method_name)
                 df = method(**params)
-                self.cache.set(namespace, params, df)
+                if use_cache:
+                    self.cache.set(namespace, params, df)
                 return df
             except Exception as e:  # noqa: BLE001
                 last_exc = e

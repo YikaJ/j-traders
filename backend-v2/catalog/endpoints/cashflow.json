@@ -22,5 +22,7 @@
     { "name": "n_cashflow_act", "dtype": "float", "role": "measure", "measure_kind": "flow", "unit": "CNY", "sign": "higher_better" }
   ],
   "rate_limit": { "qps": 8, "burst": 16 },
-  "examples": { "python": "pro.cashflow(ts_code='600000.SH', period='20181231')" }
+  "examples": { "python": "pro.cashflow(ts_code='600000.SH', period='20181231')" },
+  "cache_enabled": true,
+  "rate_limit_enabled": true
 }

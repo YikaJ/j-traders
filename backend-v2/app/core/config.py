@@ -19,6 +19,10 @@ class Settings:
     log_level: str
     api_host: str
     api_port: int
+    # AI settings (OpenAI-compatible)
+    ai_endpoint: str | None = None
+    ai_api_key: str | None = None
+    ai_model: str | None = None
 
 
 def load_settings() -> Settings:
@@ -54,4 +58,7 @@ def load_settings() -> Settings:
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         api_host=os.getenv("API_HOST", "127.0.0.1"),
         api_port=_get_int("API_PORT", 8000),
+        ai_endpoint=os.getenv("AI_ENDPOINT"),
+        ai_api_key=os.getenv("AI_API_KEY"),
+        ai_model=os.getenv("AI_MODEL"),
     )

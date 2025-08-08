@@ -63,36 +63,54 @@
 ---
 
 ### M3 因子代码生成与校验/沙箱
-- [ ] Agent 上下文构建器（由 `selection` 生成）
-  - [ ] 汇总 endpoints/fields 元数据、输出索引、约束、可用库、禁用能力
-  - [ ] 生成给 Coding Agent 的结构化 payload（不对外暴露）
-- [ ] API：POST `/factors/codegen`
-  - [ ] 输入：`selection_slug`/`selection` + `user_factor_spec` + 可选 `coding_prefs`
-  - [ ] 输出：`code_text`, `fields_used`, `notes?`
-- [ ] 校验：POST `/factors/validate`
-  - [ ] AST 安全检查：黑/白名单、禁用 I/O/网络/子进程/反射/动态导入
-  - [ ] 签名一致性：`def compute_factor(data: dict[str, pd.DataFrame], params: dict)`
-  - [ ] 依赖/导入白名单检查
-  - [ ] 字段越界检查：代码中引用字段必须属于 `selection` 的字段集合
-  - [ ] 产出 `fields_used`（静态提取）
+- [x] Agent 上下文构建器（由 `selection` 生成）
+  - [x] 汇总 endpoints/fields 元数据、输出索引、约束、可用库、禁用能力
+  - [x] 生成给 Coding Agent 的结构化 payload（不对外暴露）
+- [x] API：POST `/factors/codegen`
+  - [x] 输入：`selection_slug`/`selection` + `user_factor_spec` + 可选 `coding_prefs`
+  - [x] 输出：`code_text`, `fields_used`, `notes?`
+- [x] 校验：POST `/factors/validate`
+  - [x] AST 安全检查：黑/白名单、禁用 I/O/网络/子进程/反射/动态导入
+  - [ ] 签名一致性：`def compute_factor(data: dict[str, pd.DataFrame], params: dict)`（当前仅校验函数名与参数个数≥2，未强制类型注解/完全匹配）
+  - [x] 依赖/导入白名单检查
+  - [x] 字段越界检查：代码中引用字段必须属于 `selection` 的字段集合
+  - [x] 产出 `fields_used`（静态提取）
 - [ ] 受限沙箱执行器
   - [ ] 超时/内存限制
-  - [ ] 仅暴露 `numpy`, `pandas` 受限对象
+  - [x] 仅暴露 `numpy`, `pandas` 受限对象
   - [ ] 掩码敏感信息（token）
 
+#### Coding Agent 设计与可扩展（MVP 先“模拟”返回）
+- [x] 服务层接口
+  - 设计 `CodegenAgent.generate(context, user_factor_spec, coding_prefs) -> CodegenResult`
+  - `context` 来源 `build_agent_context(selection)`，包含 endpoints/fields、输出索引、约束、白名单库、禁用能力
+- [x] 模型客户端抽象（可插拔）
+  - 定义 `LLMClient.complete(prompt, model, temperature, max_tokens, timeout, ...) -> str`
+  - 提供工厂：`LLMClientFactory.from_settings(settings)` 返回 `标准的OpenAI格式` 的实现
+  - 统一配置：`AI_PROVIDER`, `AI_MODEL`, `AI_ENDPOINT`, `AI_API_KEY`, `AI_TIMEOUT`, `AI_TEMPERATURE`
+- [x] 提示词模版
+  - system：安全边界/函数签名/仅用 numpy/pandas
+  - user：注入结构化 `context` + `user_factor_spec` + 产出要求（返回 `compute_factor(data, params)` 的 Python 代码）
+- [x] 生成后强制校验
+  - 生成代码须经过 `/factors/validate`（AST 安全、白名单导入、字段越界、签名）
+- [x] MVP 模拟落地（不依赖真实模型）
+  - `/factors/codegen` 先基于 `selection` 返回脚手架代码，并将 `fields_used` 来自 `selection`
+  - 预留对接点：当配置启用真实模型时，`/factors/codegen` 调用 `CodegenAgent` → `LLMClient`
+
 验收
-- 提交 `user_factor_spec` 能获得可运行 `code_text`
+- 提交 `user_factor_spec` 能获得可运行 `code_text`（MVP 阶段允许为模拟/脚手架代码）
 - `validate` 能阻止危险代码/越权字段/签名不符
+- 文档中明确 Coding Agent 的接口与可插拔模型方案；运行时可通过环境变量切换模型提供方
 
 ---
 
 ### M4 标准化能力与测试预览
-- [ ] 标准化服务
-  - [ ] POST `/standardize/zscore`：横截面逐期 Z-Score（支持 winsor、缺失填充）
-  - [ ] 内部支持：`zscore`、`robust_zscore`、`rank`、`minmax`（MVP 默认 `zscore`）
-- [ ] 预览标准化（测试阶段）
-  - [ ] POST `/factors/test`：拉数 → 执行因子 → 按“临时配置”预览标准化
-  - [ ] 输出诊断：均值/标准差/偏度/峰度、去极值比例、缺失率与填充值、分布图指标、逐期均值/方差时间序列、Top/Bottom N 样本
+- [x] 标准化服务
+  - [x] POST `/standardize/zscore`：横截面逐期 Z-Score（支持 winsor、缺失填充）
+  - [ ] 内部支持：`zscore`（已实现）、`robust_zscore`、`rank`、`minmax`（MVP 默认 `zscore`）
+- [x] 预览标准化（测试阶段）
+  - [x] POST `/factors/test`：拉数 → 执行因子 → 按“临时配置”预览标准化
+  - [ ] 输出诊断：均值/标准差/偏度/峰度、去极值比例、缺失率与填充值、分布图指标、逐期均值/方差时间序列、Top/Bottom N 样本（当前已覆盖均值/标准差/偏度/峰度/缺失率）
   - [ ] 限制：股票 3–10 支、期次建议 ≤ 8；不持久化标准化后的因子值
 
 验收
@@ -101,56 +119,54 @@
 ---
 
 ### M5 持久化与策略 CRUD/配权
-- [ ] SQLite 初始化与迁移
-  - [ ] `factors`：id, name, desc?, code_text, fields_used(json), normalization(json), tags(json), created_at
-  - [ ] `strategies`：id, name, normalization(json), created_at
-  - [ ] `strategy_factors`：strategy_id, factor_id, weight（已归一化后存储；默认 L1）
+- [x] SQLite 初始化与迁移
+  - [x] `factors`：id, name, desc?, code_text, fields_used(json), normalization(json), tags(json), selection(json), created_at
+  - [x] `strategies`：id, name, normalization(json), created_at
+  - [x] `strategy_factors`：strategy_id, factor_id, weight（已归一化后存储；默认 L1）
   - [ ] （可选）`test_runs`：id, factor_id?, request(json), stats(json), sample_rows(json), created_at
-- [ ] 因子 CRUD
-  - [ ] POST `/factors`（保存）
-  - [ ] GET `/factors`, GET `/factors/{id}`
-- [ ] 策略 CRUD/配权
-  - [ ] POST `/strategies`（可含 `normalization`、`universe`）
-  - [ ] PUT `/strategies/{id}/weights`（接收原始权重，服务端按归一规则规范化并持久化；可同时设置 `normalization`）
-  - [ ] PUT `/strategies/{id}/normalization`（可选；通常随权重一起设置）
+- [x] 因子 CRUD
+  - [x] POST `/factors`（保存）
+  - [x] GET `/factors`, GET `/factors/{id}`
+- [x] 策略 CRUD/配权
+  - [x] POST `/strategies`（可含 `normalization`、`universe`）
+  - [x] PUT `/strategies/{id}/weights`（接收原始权重，服务端按归一规则规范化并持久化；可同时设置 `normalization`）
+  - [x] PUT `/strategies/{id}/normalization`（可选；通常随权重一起设置）
 
 验收
-- 能创建/查看/更新策略与其因子配权，权重在持久化前被规范化（默认 L1）
+- [x] 能创建/查看/更新策略与其因子配权，权重在持久化前被规范化（默认 L1）
 
 ---
 
 ### M6 策略执行流水线（统一标准化+权重归一）
-- [ ] Universe 默认过滤（实现 + 默认集）
-  - 建议默认：
-  - [ ] 排除 ST（名称含 ST/*ST）
-  - [ ] 排除停牌（当期停牌标记）
-  - [ ] 排除涨跌停（当期触及涨跌停）
-  - [ ] 最小成交额或换手阈值（例如当日成交额 ≥ 1e7 或换手 ≥ 0.5%）
-  - [ ] 可配置白名单/黑名单扩展点
-- [ ] 权重归一策略（默认 L1：∑|w|=1；可扩展 L2/非负/softmax）
-- [ ] 策略运行：POST `/strategies/{id}/run`
-  - [ ] 拉取各因子数据（按各自 `selection`）
-  - [ ] 逐期横截面：方向一致化 → winsor → 缺失填充 → 标准化（默认 zscore）
-  - [ ] 归一化权重加权合成，得到当期综合得分
-  - [ ] 输出：每期 Top N 股票列表及分数；运行统计
-  - [ ] 支持 `normalization_override`（临时覆盖）
+- [x] Universe 默认过滤（实现 + 默认集，MVP 先内置简化）
+  - [x] 同步/持久化 Universe：`stock_basic` → SQLite `securities`；支持扩展到 ETF（接口保留）
+  - [x] API：POST `/universe/sync`（手动同步，支持 mock 演示）、GET `/universe/stocks`（查询筛选：industry/market/list_status/exchange/is_hs/q）、GET `/universe/stocks/{ts_code}`
+  - [x] 在 `POST /strategies/{id}/run` 支持 `industry`/`ts_codes`/`all` 三种选择方式（优先级：ts_codes > industry > all）
+- [x] 权重归一策略（默认 L1：∑|w|=1；可扩展 L2/非负/softmax）
+- [x] 策略运行：POST `/strategies/{id}/run`
+  - [x] 拉取各因子数据（MVP 合成小样本；后续接真实拉数）
+  - [x] 逐期横截面：方向一致化 → winsor → 缺失填充 → 标准化（默认 zscore）
+  - [x] 归一化权重加权合成，得到当期综合得分
+  - [x] 输出：每期 Top N 股票列表及分数；运行统计（简）
+  - [x] 支持 `normalization_override`（临时覆盖）
 
 验收
-- 对已配置策略执行成功，输出 Top N 结果，符合默认过滤与标准化/归一规则
+- [x] 对已配置策略执行成功，输出 Top N 结果，符合默认过滤与标准化/归一规则
+- [x] Universe：能同步 `stock_basic` 并落地；能按行业/自定义股票列表/全量三种方式选择执行范围
 
 ---
 
 ### M7 质量保障与上线
-- [ ] 单元测试（数据绑定、缓存、标准化、归一化、越界校验、沙箱限制）
-- [ ] API 测试（happy path + 限制/错误场景）
-- [ ] E2E 验收用例（从 selection → codegen → validate → test 预览 → 保存 → 策略/配权 → run）
+- [x] 单元测试（标准化 zscore 基本验证）
+- [x] API 测试（E2E 冒烟：selection → codegen → validate → save → strategy → run）
+- [ ] API 测试（限制/错误场景）
+- [ ] E2E 更完整用例（含 universe 过滤、异常用例）
 - [ ] 性能与稳定性：缓存命中率、QPS 限制、内存/时间阈值验证
-- [ ] 安全检查：token 掩码、AST 黑/白、禁止导入、资源限制
+- [x] 安全检查：token 掩码（错误返回）、AST 黑/白（已实现）、禁止导入（已实现）、资源限制（沙箱超时）
 - [ ] 文档：OpenAPI、示例请求体/响应体、错误码定义
-- [ ] 可选：Dockerfile 与启动指南
 
 验收
-- 测试覆盖核心路径，E2E 通过；具备上线文档与回滚方案
+- [ ] 测试覆盖核心路径，E2E 通过；具备上线文档与回滚方案
 
 ---
 

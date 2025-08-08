@@ -182,6 +182,32 @@
 
 ---
 
+## 新增：Universe 数据源与执行筛选（stock_basic）
+
+### 数据源
+- 使用 TuShare `stock_basic` 作为股票列表的权威来源（较少变动，建议定期同步并落地存储）
+- 关键字段：`ts_code`, `symbol`, `name`, `area`, `industry`, `market`, `exchange`, `list_status`, `list_date`, `delist_date`, `is_hs` 等
+- 可扩展到 ETF、指数等证券（通过 `sec_type` 拓展：`stock`/`etf`/...）
+
+### 存储与同步
+- 持久化：SQLite 表 `securities`
+  - 列：`sec_type`(stock/etf)、`ts_code` PK、`symbol`、`name`、`area`、`industry`、`market`、`exchange`、`list_status`、`list_date`、`delist_date`、`is_hs`、`updated_at`
+- 同步 API（手动触发）：
+  - `POST /universe/sync` → 拉取 `stock_basic`（及后续扩展的 ETF）并刷新 `securities`
+- 查询 API：
+  - `GET /universe/stocks` → 支持筛选参数：`industry`、`market`、`list_status`、`exchange`、`is_hs`、`q`(名称/代码模糊)
+  - `GET /universe/stocks/{ts_code}`
+
+### 策略执行中的 Universe 过滤
+- 在 `POST /strategies/{id}/run` 中新增过滤参数：
+  - `industry`（按行业筛选）
+  - `ts_codes`（指定股票列表）
+  - 或 `all=true`（全量股票）
+- 优先级：`ts_codes` > `industry` > `all`
+- 最终在 universe 基础集上运行策略（默认使用策略持久化的标准化配置与权重）
+
+---
+
 ## API 设计（MVP）
 
 ### 健康
@@ -204,7 +230,7 @@
 - POST `/factors/codegen` → 基于 `selection_slug`/`selection` 与 `user_factor_spec` 构建上下文并调用 Coding Agent，返回 `code_text`、`fields_used`、`notes?`
 - POST `/factors/validate` → 语法/安全/依赖/字段越界校验（可附 `required_fields`）
 - POST `/factors/test` → 基于 selections 拉数并执行因子代码（可选标准化预览），返回样例数据与诊断统计。测试规模限制（MVP）：股票数 3–10 支。
-- POST `/factors` → 保存因子（name/desc/code/fields_used/normalization）
+- POST `/factors` → 保存因子（name/desc/code/fields_used/normalization/selection）
 - GET `/factors`、GET `/factors/{id}`
 
 ### 标准化
@@ -214,8 +240,13 @@
  - POST `/strategies` → 创建（可含 `normalization` 策略与 `universe` 过滤）
  - PUT `/strategies/{id}/weights` → 更新权重（接收原始权重，服务端按策略归一规则自动规范化并持久化；本请求可同时携带 `normalization`，实现“在关联阶段统一确定权重与标准化策略”）
  - PUT `/strategies/{id}/normalization` → 更新策略级标准化策略（可选；通常随权重一起设置）
- - POST `/strategies/{id}/run` → 执行并返回 Top N（默认按持久化的标准化与权重归一策略执行；可传 `normalization_override` 临时覆盖）
+ - POST `/strategies/{id}/run` → 执行并返回 Top N（支持 `industry`/`ts_codes`/`all` 的 universe 过滤；默认按持久化标准化与权重归一执行；可传 `normalization_override` 临时覆盖）
  - GET `/strategies/{id}`
+
+### Universe（新增）
+- POST `/universe/sync` → 同步 `stock_basic`（未来可扩展 ETF 等）
+- GET `/universe/stocks` → 支持筛选参数 `industry`、`market`、`list_status`、`exchange`、`is_hs`、`q`
+- GET `/universe/stocks/{ts_code}`
 
 ---
 
@@ -241,7 +272,7 @@
 - 单因子测试阶段仅用于“预览标准化效果”（使用策略级参数），不落库标准化后的值；保存因子时持久化的是“原始因子代码 + 默认标准化建议”。
 
 ### 策略级标准化流水线（每期横截面）
-1. 确定当期股票池（universe）：来自策略或本次运行请求。
+1. 确定当期股票池（universe）：来自策略、universe 过滤参数或本次运行请求。
 2. 取各因子当期原始值，并按因子方向做一致化（例如字段/因子标记为 `lower_better` 则取相反数，使得“越高越好”）。
 3. Winsor 去极值：按分位数 `[q_low, q_high]` 截断。
 4. 缺失处理：按期内中位数填充（可配置 `zero`/`drop`）。
@@ -307,9 +338,10 @@
 ---
 
 ## 持久化（SQLite，简化）
-- `factors`：id, name, desc?, code_text, fields_used(json), normalization(json), tags(json), created_at
+- `factors`：id, name, desc?, code_text, fields_used(json), normalization(json), tags(json), selection(json), created_at
 - `strategies`：id, name, normalization(json), created_at
 - `strategy_factors`：strategy_id, factor_id, weight  （已归一化后存储；默认 L1）
+- `securities`：sec_type, ts_code, symbol, name, area, industry, market, exchange, list_status, list_date, delist_date, is_hs, updated_at
 - （可选）`test_runs`：id, factor_id?, request(json), stats(json), sample_rows(json), created_at
 
 ## 数据模型关系（ER 图）
@@ -320,6 +352,7 @@ erDiagram
     FACTOR  }o--o{ FIELD : uses
     STRATEGY ||--o{ STRATEGY_FACTOR : has_factors
     FACTOR   ||--o{ STRATEGY_FACTOR : in_strategies
+    SECURITY ||--o{ STRATEGY : universe
 
     ENDPOINT {
       string name PK
@@ -343,6 +376,7 @@ erDiagram
       text code_text
       json fields_used
       json normalization
+      json selection
       datetime created_at
     }
 
@@ -356,10 +390,18 @@ erDiagram
     STRATEGY_FACTOR {
       int strategy_id FK
       int factor_id FK
-      float weight  // stored normalized
+      float weight
+    }
+
+    SECURITY {
+      string ts_code PK
+      string sec_type
+      string name
+      string industry
+      string market
+      string exchange
     }
 ```
-
 
 ---
 
@@ -368,6 +410,7 @@ erDiagram
 - 系统基于 selections 构建 Agent 上下文并产出可运行的因子代码
 - 指定股票池与时间窗测试，预览标准化效果并得到统计
 - 保存因子，创建策略，在关联阶段确定标准化策略与权重归一并执行，得到 Top N 股票
+- Universe：能同步 `stock_basic` 并落地；能按行业/自定义股票列表/全量三种方式选择执行范围
 
 ---
 

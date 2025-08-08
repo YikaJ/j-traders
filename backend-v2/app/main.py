@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from .routers import health, catalog, selections, factors
+from .routers import standardize
+from .routers import persist
+from .routers import universe
 from .storage.db import init_db
 from .core.config import load_settings
 from .core.logging import setup_logging
@@ -24,6 +29,9 @@ def create_app() -> FastAPI:
     app.include_router(catalog.router, prefix="/catalog", tags=["catalog"])
     app.include_router(selections.router)
     app.include_router(factors.router)
+    app.include_router(standardize.router)
+    app.include_router(persist.router)
+    app.include_router(universe.router)
 
     return app
 

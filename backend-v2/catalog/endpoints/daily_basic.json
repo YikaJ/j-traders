@@ -32,5 +32,7 @@
     { "name": "circ_mv", "dtype": "float", "role": "measure", "desc": "流通市值(万元)", "unit": "CNY_10K", "sign": "ambivalent", "tags": ["size"] }
   ],
   "rate_limit": { "qps": 8, "burst": 16 },
-  "examples": { "python": "pro.daily_basic(ts_code='600000.SH', trade_date='20180726')" }
+  "examples": { "python": "pro.daily_basic(ts_code='600000.SH', trade_date='20180726')" },
+  "cache_enabled": true,
+  "rate_limit_enabled": true
 }

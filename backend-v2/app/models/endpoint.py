@@ -39,6 +39,9 @@ class EndpointMeta(BaseModel):
     fields: List[EndpointField]
     rate_limit: Optional[RateLimit] = None
     examples: Optional[dict] = None
+    # per-endpoint flags
+    cache_enabled: bool = True
+    rate_limit_enabled: bool = True
 
 
 class RegistryEntry(BaseModel):
