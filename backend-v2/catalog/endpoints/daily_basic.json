@@ -1,0 +1,36 @@
+{
+  "name": "daily_basic",
+  "description": "每日估值/规模/流动性指标",
+  "source": "tushare",
+  "sdk": { "method": "daily_basic" },
+  "axis": "trade_date",
+  "frequency": "daily",
+  "ids": ["ts_code"],
+  "params": [
+    { "name": "ts_code", "type": "string", "required": true, "desc": "股票代码（二选一）" },
+    { "name": "trade_date", "type": "date", "required": false, "desc": "交易日期（二选一）" },
+    { "name": "start_date", "type": "date", "required": false, "desc": "开始日期" },
+    { "name": "end_date", "type": "date", "required": false, "desc": "结束日期" }
+  ],
+  "fields": [
+    { "name": "ts_code", "dtype": "string", "role": "identifier", "desc": "TS股票代码" },
+    { "name": "trade_date", "dtype": "date", "role": "timestamp", "desc": "交易日期" },
+    { "name": "close", "dtype": "float", "role": "measure", "desc": "收盘价", "unit": "CNY", "sign": "ambivalent" },
+    { "name": "turnover_rate", "dtype": "float", "role": "measure", "desc": "换手率%", "unit": "%", "sign": "ambivalent", "tags": ["liquidity"] },
+    { "name": "volume_ratio", "dtype": "float", "role": "measure", "desc": "量比", "sign": "ambivalent", "tags": ["liquidity"] },
+    { "name": "pe", "dtype": "float", "role": "measure", "desc": "PE", "unit": "x", "sign": "lower_better", "tags": ["valuation"] },
+    { "name": "pe_ttm", "dtype": "float", "role": "measure", "desc": "PE TTM", "unit": "x", "sign": "lower_better", "tags": ["valuation"] },
+    { "name": "pb", "dtype": "float", "role": "measure", "desc": "PB", "unit": "x", "sign": "lower_better", "tags": ["valuation"] },
+    { "name": "ps", "dtype": "float", "role": "measure", "desc": "PS", "unit": "x", "sign": "lower_better", "tags": ["valuation"] },
+    { "name": "ps_ttm", "dtype": "float", "role": "measure", "desc": "PS TTM", "unit": "x", "sign": "lower_better", "tags": ["valuation"] },
+    { "name": "dv_ratio", "dtype": "float", "role": "measure", "desc": "股息率%", "unit": "%", "sign": "higher_better", "tags": ["yield"] },
+    { "name": "dv_ttm", "dtype": "float", "role": "measure", "desc": "股息率TTM%", "unit": "%", "sign": "higher_better", "tags": ["yield"] },
+    { "name": "total_share", "dtype": "float", "role": "measure", "desc": "总股本(万股)", "unit": "share_10K", "sign": "ambivalent", "tags": ["size"] },
+    { "name": "float_share", "dtype": "float", "role": "measure", "desc": "流通股本(万股)", "unit": "share_10K", "sign": "ambivalent", "tags": ["size"] },
+    { "name": "free_share", "dtype": "float", "role": "measure", "desc": "自由流通股本(万)", "unit": "share_10K", "sign": "ambivalent", "tags": ["size"] },
+    { "name": "total_mv", "dtype": "float", "role": "measure", "desc": "总市值(万元)", "unit": "CNY_10K", "sign": "ambivalent", "tags": ["size"] },
+    { "name": "circ_mv", "dtype": "float", "role": "measure", "desc": "流通市值(万元)", "unit": "CNY_10K", "sign": "ambivalent", "tags": ["size"] }
+  ],
+  "rate_limit": { "qps": 8, "burst": 16 },
+  "examples": { "python": "pro.daily_basic(ts_code='600000.SH', trade_date='20180726')" }
+}

@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "endpoints": [
+    { "name": "cashflow", "file": "catalog/endpoints/cashflow.json" },
+    { "name": "daily_basic", "file": "catalog/endpoints/daily_basic.json" }
+  ]
+}

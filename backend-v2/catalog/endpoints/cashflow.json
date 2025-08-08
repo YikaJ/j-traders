@@ -1,0 +1,26 @@
+{
+  "name": "cashflow",
+  "description": "现金流量表",
+  "source": "tushare",
+  "sdk": { "method": "cashflow" },
+  "axis": "end_date",
+  "frequency": "quarterly",
+  "ids": ["ts_code"],
+  "params": [
+    { "name": "ts_code", "type": "string", "required": true, "desc": "股票代码" },
+    { "name": "period", "type": "date", "required": false, "desc": "报告期 YYYYMMDD" },
+    { "name": "start_date", "type": "date", "required": false, "desc": "公告开始日期" },
+    { "name": "end_date", "type": "date", "required": false, "desc": "公告结束日期" },
+    { "name": "report_type", "type": "string", "required": false, "desc": "报告类型" },
+    { "name": "comp_type", "type": "string", "required": false, "desc": "公司类型 1/2/3/4" },
+    { "name": "is_calc", "type": "int", "required": false, "desc": "是否计算报表" }
+  ],
+  "fields": [
+    { "name": "ts_code", "dtype": "string", "role": "identifier", "desc": "TS股票代码" },
+    { "name": "end_date", "dtype": "date", "role": "timestamp", "desc": "报告期" },
+    { "name": "net_profit", "dtype": "float", "role": "measure", "measure_kind": "flow", "unit": "CNY", "sign": "higher_better" },
+    { "name": "n_cashflow_act", "dtype": "float", "role": "measure", "measure_kind": "flow", "unit": "CNY", "sign": "higher_better" }
+  ],
+  "rate_limit": { "qps": 8, "burst": 16 },
+  "examples": { "python": "pro.cashflow(ts_code='600000.SH', period='20181231')" }
+}
