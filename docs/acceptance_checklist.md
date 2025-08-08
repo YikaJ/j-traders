@@ -1,10 +1,10 @@
-## Acceptance Checklist
+## 验收清单（Acceptance Checklist）
 
-- M0: Health OK, logging/config loaded
-- M1: Endpoints listed, endpoint detail returns, field search works; selections CRUD works
-- M2: TuShare fetch with cache, rate limit, retries; param binding works
-- M3: Codegen returns code; validate blocks dangerous code/fields; sandbox limits
-- M4: Standardize zscore API works; factors/test preview returns data + diagnostics
-- M5: Persist factors/strategies; weights normalized; read-back shows data
-- M6: Universe synced; strategy run returns Top N with universe selection
-- M7: E2E smoke passes; unit tests for standardization; security measures in place
+- M0：健康检查正常，日志/配置已加载
+- M1：端点可列出，端点详情可返回，字段搜索可用；选择集支持增改查
+- M2：TuShare 拉取具备缓存、限流与重试；参数绑定可用
+- M3：代码生成返回代码；校验能拦截危险代码/字段；沙箱限制生效
+- M4：标准化 zscore API 可用；因子/测试预览返回数据与诊断
+- M5：因子/策略可持久化；权重已归一化；读取可见数据
+- M6：股票池已同步；策略运行在指定股票池下返回 Top N
+- M7：端到端冒烟通过；标准化具单元测试；关键安全措施到位

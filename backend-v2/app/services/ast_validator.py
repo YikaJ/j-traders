@@ -101,6 +101,33 @@ class FactorAstValidator:
                         fields.add(arg0.value)
         return sorted(fields)
 
+    def _collect_assigned_fields(self, tree: ast.AST) -> Set[str]:
+        """Collect column names that are assigned to, e.g., df['new'] = ...
+        This allows us to exclude derived columns from boundary checks.
+        """
+        assigned: Set[str] = set()
+
+        def _add_from_target(target: ast.AST) -> None:
+            if isinstance(target, ast.Subscript):
+                key = self._extract_subscript_key(target)
+                if isinstance(key, str):
+                    assigned.add(key)
+            # handle tuple/list targets recursively
+            if isinstance(target, (ast.Tuple, ast.List)):
+                for elt in target.elts:
+                    _add_from_target(elt)
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    _add_from_target(t)
+            elif isinstance(node, ast.AugAssign):
+                _add_from_target(node.target)
+            elif hasattr(ast, "AnnAssign") and isinstance(node, ast.AnnAssign):  # type: ignore[attr-defined]
+                _add_from_target(node.target)  # type: ignore[arg-type]
+
+        return assigned
+
     def _check_signature(self, tree: ast.AST, errors: List[str]) -> None:
         found = False
         for node in tree.body:  # type: ignore[attr-defined]
@@ -125,7 +152,10 @@ class FactorAstValidator:
         self._check_signature(tree, errors)
         self._check_imports(tree, errors)
         self._check_banned_nodes(tree, errors)
-        fields_used = self._extract_fields_used(tree)
+        fields_all = self._extract_fields_used(tree)
+        assigned_fields = self._collect_assigned_fields(tree)
+        # keep only fields that are read, not those created via assignment
+        fields_used = [f for f in fields_all if f not in assigned_fields]
 
         if required_fields:
             for f in required_fields:

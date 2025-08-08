@@ -1,17 +1,17 @@
-## Standardization
+## 标准化（Standardization）
 
-Methods (MVP)
-- zscore (implemented)
-- robust_zscore (planned)
-- rank (planned)
-- minmax (planned)
+方法（MVP）
+- zscore（已实现）
+- robust_zscore（规划中）
+- rank（规划中）
+- minmax（规划中）
 
-Winsor & Fill
-- winsor: [low, high] quantiles
-- fill: median|zero|drop
+截尾与填充（Winsor & Fill）
+- winsor：分位数区间 [low, high]
+- fill：`median` | `zero` | `drop`
 
 API
-- POST `/standardize/zscore` with { by, winsor, fill, value_col, data }
+- POST `/standardize/zscore`，参数包含 `{ by, winsor, fill, value_col, data }`
 
-Diagnostics
-- mean, std, skew, kurt, missing_rate
+诊断指标
+- `mean`、`std`、`skew`、`kurt`、`missing_rate`

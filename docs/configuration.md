@@ -1,12 +1,12 @@
-## Configuration
+## 配置
 
-Environment variables
+环境变量
 - `TUSHARE_TOKEN`
-- `CACHE_TTL_HOURS` (default 24)
-- `MAX_QPS` (default 8)
-- `LOG_LEVEL` (INFO, DEBUG, ...)
-- `API_HOST`, `API_PORT`
-- `AI_ENDPOINT`, `AI_API_KEY`, `AI_MODEL`
+- `CACHE_TTL_HOURS`（默认 24）
+- `MAX_QPS`（默认 8）
+- `LOG_LEVEL`（INFO、DEBUG 等）
+- `API_HOST`、`API_PORT`
+- `AI_ENDPOINT`、`AI_API_KEY`、`AI_MODEL`
 
-Files
-- `.env` at project or backend-v2 level is supported and loaded
+配置文件
+- 支持在项目根目录或 `backend-v2` 目录放置 `.env`，并自动加载

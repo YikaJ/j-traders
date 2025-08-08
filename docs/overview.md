@@ -1,17 +1,17 @@
-## Overview
+## 概览
 
-Goals: Build a minimal quant factor pipeline from cataloged data to coded factors, quick test, persistence, strategy composition and run.
+目标：从已编目的数据出发，构建最小可用的量化因子流水线，实现字段选择 → 因子代码生成 → 快速测试 → 持久化 → 策略组合与运行的闭环。
 
-Key steps
-1. Select fields (Catalog → Selections)
-2. Generate factor code (Coding Agent or scaffold) based on selection context
-3. Quick test with standardization preview
-4. Save factor
-5. Create strategy
-6. Assign factor weights (decide standardization + weight normalization)
-7. Run strategy (Top N)
+关键步骤
+1. 选择字段（目录 → 选择集）
+2. 基于选择上下文生成因子代码（编码代理或脚手架）
+3. 快速测试并预览标准化结果
+4. 保存因子
+5. 创建策略
+6. 分配因子权重（确定标准化方式与权重归一化）
+7. 运行策略（返回 Top N）
 
-Core principles
-- Data-driven via JSON catalog
-- Secure sandboxed factor execution
-- Modular APIs, simple persistence, scalable later
+核心原则
+- 通过 JSON 目录驱动
+- 在沙箱中安全执行因子
+- 模块化 API、简易持久化，后续可扩展

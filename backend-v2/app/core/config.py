@@ -51,6 +51,17 @@ def load_settings() -> Settings:
         except Exception:
             return default
 
+    # AI configuration with DashScope OpenAI-compatible defaults
+    ai_api_key = os.getenv("AI_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
+    ai_endpoint = os.getenv("AI_ENDPOINT")
+    if not ai_endpoint and os.getenv("DASHSCOPE_API_KEY"):
+        # Default to DashScope OpenAI-compatible endpoint when key is present
+        ai_endpoint = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    ai_model = os.getenv("AI_MODEL")
+    if not ai_model and os.getenv("DASHSCOPE_API_KEY"):
+        # Provide a sensible default model for DashScope if none supplied
+        ai_model = "qwen3-coder-plus"
+
     return Settings(
         tushare_token=token_from_env_files or os.getenv("TUSHARE_TOKEN"),
         cache_ttl_hours=_get_int("CACHE_TTL_HOURS", 24),
@@ -58,7 +69,7 @@ def load_settings() -> Settings:
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         api_host=os.getenv("API_HOST", "127.0.0.1"),
         api_port=_get_int("API_PORT", 8000),
-        ai_endpoint=os.getenv("AI_ENDPOINT"),
-        ai_api_key=os.getenv("AI_API_KEY"),
-        ai_model=os.getenv("AI_MODEL"),
+        ai_endpoint=ai_endpoint,
+        ai_api_key=ai_api_key,
+        ai_model=ai_model,
     )

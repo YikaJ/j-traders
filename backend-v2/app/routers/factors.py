@@ -53,9 +53,14 @@ def codegen(req: CodegenRequest) -> Any:
     # Build context and try agent
     context = build_agent_context(spec)
     settings = load_settings()
+    # 允许通过 req.coding_prefs 覆盖模型名称与额外 body（如 DashScope 的 enable_thinking）
     llm = create_llm_client(endpoint=settings.ai_endpoint, api_key=settings.ai_api_key)
     agent = CodegenAgent(llm)
-    result = agent.generate(context, req.user_factor_spec, req.coding_prefs)
+    # 若未显式传入模型，使用配置的默认模型
+    coding_prefs = dict(req.coding_prefs or {})
+    if "model" not in coding_prefs and settings.ai_model:
+        coding_prefs["model"] = settings.ai_model
+    result = agent.generate(context, req.user_factor_spec, coding_prefs)
 
     return CodegenResponse(code_text=result.code_text, fields_used=fields_used, notes=result.notes or "")
 

@@ -1,13 +1,13 @@
-## Selections
+## 选择集（Selections）
 
-Spec fields
-- factor_slug, title
-- output_index: e.g., ["ts_code","trade_date"]
-- selection: array of { endpoint, fields, param_binding, join_keys }
-- constraints: winsor, zscore_axis
-- code_contract: signature, data_keys
+规范字段
+- `factor_slug`、`title`
+- `output_index`：例如 ["ts_code","trade_date"]
+- `selection`：数组，元素为 `{ endpoint, fields, param_binding, join_keys }`
+- `constraints`：如 winsor、zscore_axis
+- `code_contract`：函数签名、数据键
 
-APIs
+API
 - POST `/catalog/selections`
 - PUT `/catalog/selections/{slug}`
 - GET `/catalog/selections`

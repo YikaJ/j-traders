@@ -1,25 +1,25 @@
-# backend-v2 MVP Docs
+# backend-v2 MVP 文档
 
-This folder organizes the MVP documentation into focused topics. Start with Overview, then follow the Developer Guide.
+该目录将 MVP 文档按主题组织。建议先阅读概览，然后按开发指南推进。
 
-- Overview
+- 概览
   - [overview.md](./overview.md)
   - [roadmap.md](./roadmap.md)
-- Data & Catalog
+- 数据与目录
   - [catalog.md](./catalog.md)
   - [selections.md](./selections.md)
   - [universe.md](./universe.md)
-- Coding & Factors
+- 编码与因子
   - [agent_codegen.md](./agent_codegen.md)
   - [factors.md](./factors.md)
   - [standardization.md](./standardization.md)
-- Persistence & Strategy
+- 持久化与策略
   - [persistence.md](./persistence.md)
   - [strategy.md](./strategy.md)
-- Platform
+- 平台
   - [security.md](./security.md)
   - [configuration.md](./configuration.md)
   - [api.md](./api.md)
-- QA & Acceptance
+- 质量与验收
   - [testing.md](./testing.md)
   - [acceptance_checklist.md](./acceptance_checklist.md)

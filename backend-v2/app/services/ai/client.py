@@ -58,7 +58,11 @@ class OpenAICompatClient(LLMClient):
         }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        url = f"{self.base_url}/v1/chat/completions"
+        # If base_url already contains version segment (e.g., .../v1), avoid duplicating it
+        if self.base_url.endswith("/v1") or "/v1/" in self.base_url:
+            url = f"{self.base_url}/chat/completions"
+        else:
+            url = f"{self.base_url}/v1/chat/completions"
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
