@@ -17,6 +17,7 @@
 因子（Factors）
 - POST `/factors/codegen`
 - POST `/factors/validate`
+- POST `/factors/sample`
 - POST `/factors/test`
 - POST `/factors`
 - GET `/factors`
@@ -33,6 +34,6 @@
 - GET `/strategies/{id}`
 
 股票池（Universe）
-- POST `/universe/sync`
+- POST `/universe/sync`（支持查询参数：`since`、`list_status`、`exchange`、`market`、`industry`、`is_hs`、`limit`；可选 `mock=true`）
 - GET `/universe/stocks`
 - GET `/universe/stocks/{ts_code}`

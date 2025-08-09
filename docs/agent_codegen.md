@@ -29,6 +29,16 @@
 - `/factors/validate`：AST 安全检查（导入/调用黑白名单、函数签名校验、语法错误提示）。
 - 字段边界检查：仅允许引用 selection 中声明的字段；忽略赋值新建的派生列（如 `df['pe_ttm_z'] = ...`）。
 
+### 系统提示模板（System Prompt Template）
+- 位置：`backend-v2/app/prompts/FactorCoder.md`
+- 作用：作为 `system` 消息模板，统一约束生成规范，减少提示词漂移。
+- 占位符（生成时由后端替换）：
+  - `{{SELECTION_CONTEXT_JSON}}`：从 selections 构建的上下文 JSON（含 endpoints 元数据、约束、允许库等）
+  - `{{USER_FACTOR_SPEC}}`：预留给用户填写的因子需求说明
+  - `{{ALLOWED_FIELDS}}`：从选择集聚合的可用字段清单
+  - `{{OUTPUT_INDEX}}`：选择集声明的输出索引
+- 回退机制：若模板文件缺失，使用内置的安全 system 提示词（同样仅返回纯代码）。
+
 ### API
 - `POST /factors/codegen`
   - 入参：
@@ -50,6 +60,15 @@ curl -X POST http://127.0.0.1:8000/factors/codegen \
     }
   }'
 ```
+
+### 测试与验收
+- 覆盖内容：
+  - 模板加载与占位符替换是否生效（存在/缺失两种路径）
+  - 生成代码的剥壳、AST 校验、字段边界（含派生列忽略）
+  - 结合 Qwen（DashScope 兼容）实际出码可被 `/factors/validate` 接受
+- 运行方式：参考 `docs/testing.md`（M0–M7 验收测试）。重点关注：
+  - M3：`/factors/codegen` 返回代码、`/factors/validate` 正确放行/拦截
+  - M7：端到端从 codegen→validate→persist→strategy→run 全链路通过
 
 ### 安全性
 - 沙箱执行仅允许 numpy/pandas；禁止其他导入。

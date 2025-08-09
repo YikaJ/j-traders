@@ -23,7 +23,11 @@ from ..storage.db import (
 )
 from ..services.sandbox import RestrictedSandbox
 from ..services.standardize import zscore_df
+from ..services.context_builder import load_endpoint_meta
+from ..services.param_binding import bind_params_for_item
+from ..services.tushare_client import TuShareClient
 import pandas as pd
+import numpy as np
 
 router = APIRouter(tags=["persist"])
 
@@ -100,8 +104,10 @@ def run_strategy(strategy_id: int, body: Dict[str, Any]) -> Any:
     weights = [{"factor_id": w["factor_id"], "weight": float(w["weight"]) / total} for w in weights]
 
     ts_codes: List[str] = body.get("ts_codes") or ["000001.SZ", "600000.SH"]
-    dates: List[str] = [body.get("start_date") or "20210101", body.get("end_date") or "20210108"]
+    start_date: str = body.get("start_date") or "20210101"
+    end_date: str = body.get("end_date") or "20210108"
     top_n: int = int(body.get("top_n") or 5)
+    want_diag: bool = bool(body.get("diagnostics", {}).get("enabled", True))
 
     sb = RestrictedSandbox()
 
@@ -117,28 +123,75 @@ def run_strategy(strategy_id: int, body: Dict[str, Any]) -> Any:
         group_by = group_by or output_index[-1:]
         # prepare fields
         fields_used: List[str] = f.get("fields_used") or []
+        if not fields_used:
+            # fallback: use fields from selection items
+            try:
+                _sel_items = sel.get("selection", [])
+                acc: List[str] = []
+                for _it in _sel_items:
+                    acc.extend(_it.get("fields", []))
+                fields_used = sorted(sorted(set(acc)))
+            except Exception:
+                fields_used = []
         fields = list(set(fields_used + output_index))
         data_keys: List[str] = sel.get("code_contract", {}).get("data_keys") or ["daily_basic"]
         data: Dict[str, pd.DataFrame] = {}
-        for key in data_keys:
-            rows: List[Dict[str, Any]] = []
-            for ts in ts_codes:
-                for d in dates:
-                    row: Dict[str, Any] = {}
-                    for fld in fields:
-                        if fld == "ts_code":
-                            row[fld] = ts
-                        elif fld in ("trade_date", "end_date"):
-                            row[fld] = d
-                        else:
-                            row[fld] = 1.0
-                    rows.append(row)
-            data[key] = pd.DataFrame(rows)
+        ts_client = TuShareClient()
+        # 为每个数据源按 selection.param_binding 绑定请求参数，并真实拉取
+        # 附加 Notebook/运行时传入的 start_date/end_date/ts_codes 作为默认覆盖
+        request_args = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "ts_codes": ts_codes,
+        }
+        # sel 是 dict（来自 DB）而非 Pydantic 模型，这里按 dict 访问
+        for item in sel.get("selection", []):
+            endpoint_name: str = item["endpoint"]
+            endpoint_meta = load_endpoint_meta(endpoint_name)
+            # 适配 dict 结构到 SelectionItem 所需的最小字段
+            class _ItemShim:
+                def __init__(self, d: Dict[str, Any]) -> None:
+                    self.param_binding = d.get("param_binding", {})
+            bound_params, iter_ts = bind_params_for_item(_ItemShim(item), request_args)
+            # 限定字段：仅请求本 item 所需字段 + 输出索引，减少带宽并利于因子执行
+            item_fields = sorted(sorted(set((item.get("fields") or []) + output_index)))
+            if item_fields:
+                bound_params["fields"] = ",".join(item_fields)
+            # 若未配置 param_binding.ts_code 迭代，但上层提供了 ts_codes，则使用迭代
+            iter_list = iter_ts or ts_codes
+            # 推断时间参数名（适配 daily_basic: trade_date, cashflow: end_date）
+            if endpoint_meta.axis == "trade_date":
+                if "start_date" not in bound_params:
+                    bound_params["start_date"] = start_date
+                if "end_date" not in bound_params:
+                    bound_params["end_date"] = end_date
+            elif endpoint_meta.axis == "end_date":
+                # cashflow 常见用 period/end_date 范围，优先使用 period=end_date 过滤
+                if "start_date" in endpoint_meta.params and "end_date" in endpoint_meta.params:  # type: ignore[attr-defined]
+                    bound_params.setdefault("start_date", start_date)
+                    bound_params.setdefault("end_date", end_date)
+                else:
+                    bound_params.setdefault("period", end_date)
+
+            # 拉取（按 ts_code 迭代合并）
+            if iter_list:
+                df = ts_client.fetch_iter_ts_codes(endpoint_meta, bound_params, iter_list)
+            else:
+                df = ts_client.fetch(endpoint_meta, bound_params)
+            # 只保留需要的列，避免无关列干扰
+            if not df.empty and item_fields:
+                keep_cols = [c for c in item_fields if c in df.columns]
+                if keep_cols:
+                    df = df[keep_cols]
+            data[endpoint_name] = df
         # execute factor
         res = sb.exec_compute(f.get("code_text", ""), data, {})
         if not res.ok or not isinstance(res.result, pd.DataFrame) or "factor" not in res.result.columns:
             # fallback: use synthetic constant factor
-            df = data[data_keys[0]].copy()
+            base_key = data_keys[0] if data_keys and data_keys[0] in data else (next(iter(data.keys()), None))
+            if base_key is None or data.get(base_key) is None or data.get(base_key).empty:
+                return {"results": [], "notes": "no data fetched for selection"}
+            df = data[base_key].copy()
             df["factor"] = 0.0
         else:
             df = res.result
@@ -155,6 +208,80 @@ def run_strategy(strategy_id: int, body: Dict[str, Any]) -> Any:
 
     weight_cols = [c for c in combined.columns if c.startswith("factor_")]
     combined["score"] = combined[weight_cols].sum(axis=1)
-    combined = combined.sort_values("score", ascending=False)
-    results = combined.head(top_n).to_dict(orient="records")
-    return {"results": results, "group_by": group_by}
+    # Base results for backward-compat (global top_n)
+    base_sorted = combined.sort_values("score", ascending=False)
+    results = base_sorted.head(top_n).to_dict(orient="records")
+
+    # Cross-sectional selection key
+    date_key = (group_by or ["trade_date"])[0]
+    if date_key not in combined.columns:
+        date_key = "trade_date" if "trade_date" in combined.columns else combined.columns[-1]
+
+    out: Dict[str, Any] = {"results": results, "group_by": group_by}
+
+    # Optional: per-date Top N for screening workflows
+    per_date_top_n = int(body.get("per_date_top_n") or 0)
+    if per_date_top_n > 0 and date_key in combined.columns:
+        per_date: List[Dict[str, Any]] = []
+        for d, g in combined.groupby(date_key):
+            top_g = (
+                g.sort_values("score", ascending=False)
+                .head(per_date_top_n)
+                .to_dict(orient="records")
+            )
+            per_date.append({"date": str(d), "items": top_g})
+        # sort sections by date ascending for readability
+        try:
+            per_date = sorted(per_date, key=lambda x: x["date"])  # type: ignore[assignment]
+        except Exception:
+            pass
+        out["per_date_results"] = per_date
+
+    # Diagnostics: IC/RankIC/Coverage
+    if want_diag:
+        diag: Dict[str, Any] = {}
+        try:
+            # fetch close prices for forward returns
+            endpoint_meta = load_endpoint_meta("daily_basic")
+            ts_client = TuShareClient()
+            price_df = ts_client.fetch_iter_ts_codes(
+                endpoint_meta,
+                {"start_date": start_date, "end_date": end_date, "fields": "ts_code,trade_date,close"},
+                ts_codes,
+            )
+            if not price_df.empty:
+                price_df = price_df.sort_values(["ts_code", "trade_date"]).copy()
+                price_df["fwd_ret"] = price_df.groupby("ts_code")["close"].pct_change(periods=-1)
+                # merge on (ts_code, trade_date)
+                if "ts_code" in combined.columns and date_key in combined.columns:
+                    merged = combined.merge(
+                        price_df[["ts_code", "trade_date", "fwd_ret"]],
+                        left_on=["ts_code", date_key],
+                        right_on=["ts_code", "trade_date"],
+                        how="left",
+                    )
+                    merged = merged.drop(columns=["trade_date_y"], errors="ignore").rename(columns={"trade_date_x": "trade_date"})
+                    # compute IC per date then average
+                    grp = merged.dropna(subset=["score", "fwd_ret"]).groupby(date_key)
+                    ic_list: List[float] = []
+                    ric_list: List[float] = []
+                    for _, g in grp:
+                        if len(g) >= 2:
+                            ic = float(np.corrcoef(g["score"], g["fwd_ret"])[0, 1])
+                            ic_list.append(ic)
+                            ric = float(g["score"].rank().corr(g["fwd_ret"].rank()))
+                            ric_list.append(ric)
+                    diag["ic_mean"] = float(np.nanmean(ic_list)) if ic_list else None
+                    diag["rank_ic_mean"] = float(np.nanmean(ric_list)) if ric_list else None
+                    # coverage: non-missing factor fraction per date
+                    cov = []
+                    for d, g in combined.groupby(date_key):
+                        total = len(g)
+                        valid = int(g["score"].notna().sum())
+                        cov.append(valid / total if total > 0 else np.nan)
+                    diag["coverage_mean"] = float(np.nanmean(cov)) if cov else None
+        except Exception as e:
+            diag = {"error": str(e)}
+        out["diagnostics"] = diag
+
+    return out

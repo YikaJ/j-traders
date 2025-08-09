@@ -61,3 +61,17 @@ class TestDiagnosis(BaseModel):
 class TestResponse(BaseModel):
     sample_rows: List[Dict[str, Any]]
     diagnosis: Dict[str, Any]
+
+
+class SampleRequest(BaseModel):
+    selection_slug: Optional[str] = None
+    selection: Optional[SelectionSpec] = None
+    ts_codes: List[str] = Field(default_factory=list)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    top_n: int = 10
+
+
+class SampleResponse(BaseModel):
+    data: Dict[str, List[Dict[str, Any]]]
+    notes: Optional[str] = None

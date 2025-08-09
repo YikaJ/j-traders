@@ -6,6 +6,7 @@ import io
 import sys
 import types
 import signal
+import threading
 from dataclasses import dataclass
 from typing import Any, Dict
 
@@ -59,37 +60,43 @@ class RestrictedSandbox:
         raise TimeoutError("sandbox execution timed out")
 
     def exec_compute(self, code_text: str, data: Dict[str, pd.DataFrame], params: Dict[str, Any]) -> SandboxResult:
-        g: Dict[str, Any] = {
-            "__builtins__": self.safe_builtins,
-        }
+        # Provide guarded builtins (including a restricted __import__)
+        builtins_dict: Dict[str, Any] = dict(self.safe_builtins)
+        builtins_dict["__import__"] = self._guard_import
+        g: Dict[str, Any] = {"__builtins__": builtins_dict}
         # provide modules
         g.update(self.allowed_modules)
 
         # capture prints
         stdout_io = io.StringIO()
         old_stdout = sys.stdout
-        old_handler = signal.getsignal(signal.SIGALRM)
+        # signal 仅能在主线程使用；Notebook/TestClient 可能运行在非主线程
+        is_main_thread = threading.current_thread() is threading.main_thread()
+        old_handler = signal.getsignal(signal.SIGALRM) if is_main_thread else None
         try:
             sys.stdout = stdout_io
-            # allow only whitelisted imports
-            g["__import__"] = self._guard_import
             # exec code
             exec(compile(code_text, "<factor>", "exec"), g, g)
             if "compute_factor" not in g or not callable(g["compute_factor"]):
                 return SandboxResult(False, None, stdout_io.getvalue(), "compute_factor not defined")
             # set timeout
-            signal.signal(signal.SIGALRM, self._timeout_handler)
-            signal.alarm(self.timeout_seconds)
-            res = g["compute_factor"](data, params)
-            signal.alarm(0)
+            if is_main_thread:
+                signal.signal(signal.SIGALRM, self._timeout_handler)
+                signal.alarm(self.timeout_seconds)
+                res = g["compute_factor"](data, params)
+                signal.alarm(0)
+            else:
+                # 非主线程环境下不使用 signal，直接执行；MVP 暂不强制超时
+                res = g["compute_factor"](data, params)
             return SandboxResult(True, res, stdout_io.getvalue(), None)
         except Exception as e:
             return SandboxResult(False, None, stdout_io.getvalue(), str(e))
         finally:
             sys.stdout = old_stdout
             try:
-                signal.alarm(0)
-                if old_handler is not None:
-                    signal.signal(signal.SIGALRM, old_handler)
+                if is_main_thread:
+                    signal.alarm(0)
+                    if old_handler is not None:
+                        signal.signal(signal.SIGALRM, old_handler)
             except Exception:
                 pass

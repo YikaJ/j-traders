@@ -14,6 +14,13 @@ router = APIRouter(prefix="/universe", tags=["universe"])
 def sync_universe(
     sec_type: str = Query("stock", pattern="^(stock|etf)$"),
     mock: bool = Query(False, description="Seed demo rows when true"),
+    since: Optional[str] = Query(None, description="仅同步 list_date >= since 的记录，如 20200101"),
+    list_status: Optional[str] = Query(None, description="上市状态: L/D/P"),
+    exchange: Optional[str] = Query(None, description="交易所: SSE/SZSE/BSE"),
+    market: Optional[str] = Query(None, description="市场: 主板/创业板/科创板/北交所 等"),
+    industry: Optional[str] = Query(None, description="行业（本地过滤）"),
+    is_hs: Optional[str] = Query(None, description="沪深港通标的: N/S/H"),
+    limit: Optional[int] = Query(None, description="限制同步条数（用于快速拉取小样本）"),
 ) -> Any:
     if sec_type != "stock":
         return {"ok": True, "synced": 0, "notes": "ETFs not implemented in MVP"}
@@ -24,17 +31,33 @@ def sync_universe(
         ]
         n = bulk_upsert_securities(rows)
         return {"ok": True, "synced": n, "notes": "mock seeded"}
-    # fetch stock_basic via tushare
+    # fetch stock_basic via tushare (real source)
     try:
         import tushare as ts  # type: ignore
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         raise HTTPException(status_code=500, detail="tushare not installed")
     settings = load_settings()
     if not settings.tushare_token:
         raise HTTPException(status_code=500, detail="TUSHARE_TOKEN is required")
     ts.set_token(settings.tushare_token)
     pro = ts.pro_api()
-    df = pro.stock_basic(fields="ts_code,symbol,name,area,industry,market,exchange,list_status,list_date,delist_date,is_hs")
+    params: Dict[str, Any] = {}
+    if list_status:
+        params["list_status"] = list_status
+    if exchange:
+        params["exchange"] = exchange
+    if market:
+        params["market"] = market
+    if is_hs:
+        params["is_hs"] = is_hs
+    if limit:
+        params["limit"] = int(limit)
+    df = pro.stock_basic(fields="ts_code,symbol,name,area,industry,market,exchange,list_status,list_date,delist_date,is_hs", **params)
+    # local filter by industry/since
+    if industry and "industry" in df.columns:
+        df = df[df["industry"] == industry]
+    if since and "list_date" in df.columns:
+        df = df[(df["list_date"].astype(str) >= str(since))]
     rows: List[Dict[str, Any]] = []
     for _, r in df.iterrows():
         rows.append({

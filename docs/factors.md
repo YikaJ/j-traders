@@ -3,7 +3,8 @@
 API
 - POST `/factors/codegen` → 返回 `code_text`、`fields_used`、`notes`
 - POST `/factors/validate` → 返回 `ok`、`fields_used`、`errors`
-- POST `/factors/test` → 使用合成数据执行并提供 zscore 预览
+- POST `/factors/sample` → 基于 selection 自动抓取真实小样本（带缓存）；失败时回退到带扰动的合成数据
+- POST `/factors/test` → 在样本数据上执行并提供 zscore 预览与诊断
 - POST `/factors` → 保存因子
 - GET `/factors`，GET `/factors/{id}`
 

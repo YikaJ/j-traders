@@ -2,7 +2,7 @@
 
 - 数据源：TuShare `stock_basic`
 - 持久化：SQLite 表 `securities`（sec_type, ts_code, symbol, name, area, industry, market, exchange, list_status, list_date, delist_date, is_hs, updated_at）
-- 同步 API：POST `/universe/sync`（支持 `?mock=true`）
+- 同步 API：POST `/universe/sync`（支持查询参数：`since`、`list_status`、`exchange`、`market`、`industry`、`is_hs`、`limit`；`mock=true` 可用于演示）
 - 查询 API：
   - GET `/universe/stocks`（过滤项：industry、market、list_status、exchange、is_hs、q）
   - GET `/universe/stocks/{ts_code}`

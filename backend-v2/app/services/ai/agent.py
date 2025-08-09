@@ -47,7 +47,8 @@ class CodegenAgent:
             system = (
                 "你是量化研究编码助手。请只生成 Python 代码，函数签名：\n"
                 "def compute_factor(data: dict[str, pd.DataFrame], params: dict) -> pd.DataFrame\n"
-                "约束：仅可使用 pandas/numpy；禁止 IO/网络/子进程/动态导入/反射；输出需保留 output_index，且包含 'factor' 列。\n\n"
+                "约束：仅可使用 pandas/numpy；禁止 IO/网络/子进程/动态导入/反射；输出需保留 output_index，且包含 'factor' 列。\n"
+                "不要在函数中做 winsor、缺失填充、标准化或方向一致化，这些在系统后续阶段统一处理。\n\n"
                 "[SELECTION_CONTEXT_JSON]\n" + json.dumps(context, ensure_ascii=False) + "\n\n"
                 "[USER_FACTOR_SPEC]\n" + user_factor_spec + "\n\n"
                 "只返回代码，不要解释或 Markdown。"

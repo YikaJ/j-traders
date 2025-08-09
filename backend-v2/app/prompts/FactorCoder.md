@@ -10,6 +10,7 @@ def compute_factor(data: dict[str, pd.DataFrame], params: dict) -> pd.DataFrame
 - 输出的 DataFrame 必须保留指定的输出索引，并包含列名为 `factor` 的结果列
 - 严格只使用选择集提供的字段，禁止越界引用
 - 仅返回纯代码，不要输出解释、注释或 Markdown 代码围栏
+- 不要在函数中做 winsor、缺失填充、标准化（zscore/robust_zscore/rank/minmax）或“方向一致化”（高/低好），这些由系统在后续阶段统一处理
 
 [上下文（JSON）]
 {{SELECTION_CONTEXT_JSON}}

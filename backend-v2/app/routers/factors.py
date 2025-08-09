@@ -12,9 +12,16 @@ from ..models.factor import (
     TestResponse,
     ValidateRequest,
     ValidateResponse,
+    SampleRequest,
+    SampleResponse,
 )
 from ..models.selection import SelectionSpec
-from ..services.context_builder import load_selection_by_slug, gather_selection_fields, build_agent_context
+from ..services.context_builder import (
+    load_selection_by_slug,
+    gather_selection_fields,
+    build_agent_context,
+    load_endpoint_meta,
+)
 from ..services.validator_service import validate_code_against_selection
 from ..services.ast_validator import FactorAstValidator
 from ..core.config import load_settings
@@ -22,6 +29,7 @@ from ..services.ai.client import create_llm_client
 from ..services.ai.agent import CodegenAgent
 from ..services.sandbox import RestrictedSandbox
 from ..services.standardize import zscore_df, compute_diagnostics
+from ..services.tushare_client import TuShareClient
 
 router = APIRouter(prefix="/factors", tags=["factors"])
 
@@ -31,6 +39,77 @@ def _flatten_fields(fields_map: dict[str, set[str]]) -> List[str]:
     for s in fields_map.values():
         flat.extend(list(s))
     return sorted(sorted(set(flat)))
+
+
+@router.post("/sample", response_model=SampleResponse)
+def sample_data(req: SampleRequest) -> Any:
+    # 自动按 selection 抓取真实样本（带缓存），失败则回退合成（带扰动）
+    if req.selection is None and not req.selection_slug:
+        raise HTTPException(status_code=400, detail="selection or selection_slug is required")
+    spec: SelectionSpec
+    if req.selection is not None:
+        spec = req.selection
+    else:
+        try:
+            spec = load_selection_by_slug(req.selection_slug or "")
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="selection slug not found")
+
+    tickers = req.ts_codes or ["000001.SZ", "600000.SH"]
+    dates = [req.start_date or "20210101", req.end_date or "20210108"]
+
+    ts_client: TuShareClient | None = None
+    try:
+        ts_client = TuShareClient()
+    except Exception:
+        ts_client = None
+
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    notes: List[str] = []
+
+    for item in spec.selection:
+        df: pd.DataFrame | None = None
+        if ts_client is not None:
+            try:
+                meta = load_endpoint_meta(item.endpoint)
+                base_params: Dict[str, Any] = {}
+                if req.start_date:
+                    base_params["start_date"] = req.start_date
+                if req.end_date:
+                    base_params["end_date"] = req.end_date
+                pulled = ts_client.fetch_iter_ts_codes(meta, base_params, tickers)
+                if pulled is not None and not pulled.empty:
+                    need_cols = set(item.fields + spec.output_index)
+                    present = [c for c in pulled.columns if c in need_cols]
+                    if present:
+                        df = pulled[present].copy()
+                        if not set(spec.output_index).issubset(set(df.columns)):
+                            df = None
+            except Exception as e:  # noqa: BLE001
+                notes.append(f"fetch failed for {item.endpoint}: {e}")
+                df = None
+        if df is None or df.empty:
+            # fallback synthetic with perturbation
+            rows: List[Dict[str, Any]] = []
+            for ts in tickers:
+                for d in dates:
+                    row: Dict[str, Any] = {}
+                    for f in set(item.fields + spec.output_index):
+                        if f == "ts_code":
+                            row[f] = ts
+                        elif f in ("trade_date", "end_date"):
+                            row[f] = d
+                        else:
+                            idx_t = tickers.index(ts)
+                            idx_d = dates.index(d)
+                            row[f] = 1.0 + 0.2 * idx_t + 0.1 * idx_d
+                    rows.append(row)
+            df = pd.DataFrame(rows)
+            notes.append(f"fallback synthetic for {item.endpoint}")
+
+        out[item.endpoint] = df.head(req.top_n).to_dict(orient="records")
+
+    return SampleResponse(data=out, notes="; ".join(notes) if notes else None)
 
 
 @router.post("/codegen", response_model=CodegenResponse)
@@ -90,25 +169,56 @@ def test_factor(req: TestRequest) -> Any:
         raise HTTPException(status_code=400, detail="selection is required for test in MVP")
     spec: SelectionSpec = req.selection
 
-    # 1) build minimal synthetic data for each endpoint
+    # 1) build small sample per endpoint: prefer TuShare (cached); fallback to synthetic with perturbation
     data: Dict[str, pd.DataFrame] = {}
+    tickers = req.ts_codes or ["000001.SZ", "600000.SH"]
+    dates = [req.start_date or "20210101", req.end_date or "20210108"]
+
+    # try init TuShare client; if unavailable, fallback later
+    ts_client: TuShareClient | None = None
+    try:
+        ts_client = TuShareClient()
+    except Exception:
+        ts_client = None
+
     for item in spec.selection:
-        rows: List[Dict[str, Any]] = []
-        # build two dates and two tickers
-        tickers = req.ts_codes or ["000001.SZ", "600000.SH"]
-        dates = [req.start_date or "20210101", req.end_date or "20210108"]
-        for ts in tickers:
-            for d in dates:
-                row = {}
-                for f in set(item.fields + spec.output_index):
-                    if f == "ts_code":
-                        row[f] = ts
-                    elif f in ("trade_date", "end_date"):
-                        row[f] = d
-                    else:
-                        row[f] = 1.0
-                rows.append(row)
-        df = pd.DataFrame(rows)
+        df: pd.DataFrame | None = None
+        if ts_client is not None:
+            try:
+                meta = load_endpoint_meta(item.endpoint)
+                base_params: Dict[str, Any] = {}
+                if req.start_date:
+                    base_params["start_date"] = req.start_date
+                if req.end_date:
+                    base_params["end_date"] = req.end_date
+                pulled = ts_client.fetch_iter_ts_codes(meta, base_params, tickers)
+                if pulled is not None and not pulled.empty:
+                    need_cols = set(item.fields + spec.output_index)
+                    present = [c for c in pulled.columns if c in need_cols]
+                    if present:
+                        df = pulled[present].copy()
+                        if not set(spec.output_index).issubset(set(df.columns)):
+                            df = None
+            except Exception:
+                df = None
+
+        if df is None or df.empty:
+            rows: List[Dict[str, Any]] = []
+            for ts in tickers:
+                for d in dates:
+                    row: Dict[str, Any] = {}
+                    for f in set(item.fields + spec.output_index):
+                        if f == "ts_code":
+                            row[f] = ts
+                        elif f in ("trade_date", "end_date"):
+                            row[f] = d
+                        else:
+                            idx_t = tickers.index(ts)
+                            idx_d = dates.index(d)
+                            row[f] = 1.0 + 0.2 * idx_t + 0.1 * idx_d
+                    rows.append(row)
+            df = pd.DataFrame(rows)
+
         data[item.endpoint] = df
 
     # 2) run in sandbox
