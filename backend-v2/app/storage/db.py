@@ -303,3 +303,61 @@ def get_stock(ts_code: str) -> Optional[Dict[str, Any]]:
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def update_factor(
+    factor_id: int,
+    *,
+    name: str,
+    desc: Optional[str],
+    code_text: str,
+    fields_used: List[str],
+    normalization: Optional[Dict[str, Any]],
+    tags: Optional[List[str]],
+    selection: Optional[Dict[str, Any]],
+) -> None:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        UPDATE factors
+        SET name = ?, desc = ?, code_text = ?, fields_used = ?, normalization = ?, tags = ?, selection = ?
+        WHERE id = ?
+        """,
+        (
+            name,
+            desc,
+            code_text,
+            to_json(fields_used),
+            to_json(normalization),
+            to_json(tags),
+            to_json(selection),
+            factor_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_factor(factor_id: int) -> None:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM factors WHERE id = ?", (factor_id,))
+    conn.commit()
+    conn.close()
+
+
+def list_strategies() -> List[Dict[str, Any]]:
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name, created_at FROM strategies ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0],
+            "name": r[1],
+            "created_at": r[2],
+        }
+        for r in rows
+    ]

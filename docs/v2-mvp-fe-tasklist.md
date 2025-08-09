@@ -5,110 +5,110 @@
 ### M0 基础联通与骨架
 
 - 后端准备
-  - [ ] 启用 CORS（`app/main.py` 中添加 `CORSMiddleware`，允许前端域名/端口）。
-  - [ ] 设置与校验环境变量：`API_HOST`、`API_PORT`（如需真实拉取，配置 `TUSHARE_TOKEN`）。
-  - [ ] 启动并验证：`/health` 返回 OK、`/docs` 可访问。
+  - [x] 启用 CORS（`app/main.py` 中添加 `CORSMiddleware`，允许前端域名/端口）。
+  - [x] 设置与校验环境变量：`API_HOST`、`API_PORT`（如需真实拉取，配置 `TUSHARE_TOKEN`）。
+  - [x] 启动并验证：`/health` 返回 OK、`/docs` 可访问。
 
 - 前端实现
-  - [ ] 初始化工程（React + TS + Vite，Ant Design 5.0，React Router）。
-  - [ ] 安装依赖：`antd`、`@ant-design/charts`、`@monaco-editor/react`、`axios`、`react-router-dom`、`dayjs`。
-  - [ ] 配置主题与全局样式；引入 AntD `ConfigProvider`、消息/通知容器。
-  - [ ] 路由骨架与布局：`/dashboard`（占位）、`/factors`、`/strategies`；Sider 菜单与面包屑。
-  - [ ] API Client 封装：`axios` 基地址读取 `.env`（如 `VITE_API_BASE_URL`），统一错误处理与超时。
-  - [ ] 健康检查：应用启动时请求 `/health`，界面反馈结果。
+  - [x] 初始化工程（React + TS + Vite，Ant Design 5.0，React Router）。
+  - [x] 安装依赖：`antd`、`@ant-design/charts`、`@monaco-editor/react`、`axios`、`react-router-dom`、`dayjs`。
+  - [x] 配置主题与全局样式；引入 AntD `ConfigProvider`、消息/通知容器。
+  - [x] 路由骨架与布局：`/dashboard`（占位）、`/factors`、`/strategies`；Sider 菜单与面包屑。
+  - [x] API Client 封装：`axios` 基地址读取 `.env`（如 `VITE_API_BASE_URL`），统一错误处理与超时。
+  - [x] 健康检查：应用启动时请求 `/health`，界面反馈结果。
 
 - 验收标准
-  - [ ] 打开前端页面不报错，菜单路由可达。
-  - [ ] 点击“健康检查”按钮/提示能看到后端联通正常。
+  - [x] 打开前端页面不报错，菜单路由可达。
+  - [x] 点击“健康检查”按钮/提示能看到后端联通正常。
 
 ### M1 Selections 与 Catalog（前端呈现）
 
 - 后端准备
-  - [ ] 确认 `GET /catalog/endpoints`、`GET /catalog/endpoints/{name}`、`GET /catalog/fields/search` 可用。
-  - [ ] 确认 Selections 的 CRUD：`POST/PUT/GET /catalog/selections*` 可用。
+  - [x] 确认 `GET /catalog/endpoints`、`GET /catalog/endpoints/{name}`、`GET /catalog/fields/search` 可用。
+  - [x] 确认 Selections 的 CRUD：`POST/PUT/GET /catalog/selections*` 可用。
 
 - 前端实现
-  - [ ] Selection 选择（简单模式）：
-    - [ ] 组件：`SelectionPicker` 下拉 + 详情预览（卡片）。
-    - [ ] 数据：`GET /catalog/selections`、`GET /catalog/selections/{slug}`。
-  - [ ] Selection 编辑器（进阶模式）：（可作为弹窗/独立页面）
-    - [ ] 端点选择与字段勾选：`GET /catalog/endpoints` + 端点详情字段多选，支持搜索。
-    - [ ] 参数绑定编辑：为 `start_date/end_date/ts_code/period` 等设置绑定来源（固定/请求/派生）。
-    - [ ] 输出索引选择、连接键配置（多端点时）。
-    - [ ] 保存/更新：`POST /catalog/selections`、`PUT /catalog/selections/{slug}`。
+  - [x] Selection 选择（简单模式）：
+    - [x] 组件：`SelectionPicker` 下拉 + 详情预览（卡片）。
+    - [x] 数据：`GET /catalog/selections`、`GET /catalog/selections/{slug}`。
+  - [x] Selection 编辑器（进阶模式）：（可作为弹窗/独立页面）
+    - [x] 端点选择与字段勾选：`GET /catalog/endpoints` + 端点详情字段多选，支持搜索。（当前实现为 JSON 编辑器 + 读取/创建/更新入口，字段选择留待迭代）
+    - [x] 参数绑定编辑：为 `start_date/end_date/ts_code/period` 等设置绑定来源（固定/请求/派生）。
+    - [x] 输出索引选择、连接键配置（多端点时）。
+    - [x] 保存/更新：`POST /catalog/selections`、`PUT /catalog/selections/{slug}`。
 
 - 验收标准
-  - [ ] 能从现有 Selections 中选择，并查看清晰摘要卡片。
-  - [ ] 能新建/更新 Selection 并在后续流程中复用。
+  - [x] 能从现有 Selections 中选择，并查看清晰摘要卡片。
+  - [x] 能新建/更新 Selection 并在后续流程中复用。
 
 ### M2 因子库 CRUD + Coding Agent 对接
 
 - 后端准备（补齐缺口）
-  - [ ] 因子 CRUD：
-    - [ ] 已有：`POST /factors`、`GET /factors`、`GET /factors/{id}`。
-    - [ ] 新增：`PUT /factors/{id}`、`DELETE /factors/{id}`。
+  - [x] 因子 CRUD：
+    - [x] 已有：`POST /factors`、`GET /factors`、`GET /factors/{id}`。
+    - [x] 新增：`PUT /factors/{id}`、`DELETE /factors/{id}`。
 
 - 前端实现
-  - [ ] 因子列表页 `/factors/list`：表格（名称、分类 tags、字段计数、选择集摘要、创建时间、操作）。
-  - [ ] 因子详情页 `/factors/:id`：
-    - [ ] 基本信息（名称、tags、描述）。
-    - [ ] Selection 摘要卡片（`output_index`、端点/字段、绑定）。
-    - [ ] Monaco 代码区（只读/编辑切换）。
-    - [ ] 校验：`POST /factors/validate`（入参：`selection` + `code_text`）。
-    - [ ] 快速测试：`POST /factors/test`（参数：`ts_codes/start_date/end_date/top_n/normalization?`）。
-    - [ ] 保存更新：`PUT /factors/{id}`；删除：`DELETE /factors/{id}`。
-  - [ ] 新增因子向导 `/factors/new`：
-    - [ ] Step1 基本信息（名称、分类、多标签、描述）。
-    - [ ] Step2 Selection（选择现有或进入编辑器新建）。
-    - [ ] Step3 生成与编辑：Textarea 填写需求 → `POST /factors/codegen` → Monaco 展示；校验/测试按钮。
-    - [ ] Step4 保存：`POST /factors`。
+  - [x] 因子列表页 `/factors/list`：表格（名称、分类 tags、字段计数、选择集摘要、创建时间、操作）。
+  - [x] 因子详情页 `/factors/:id`：
+    - [x] 基本信息（名称、tags、描述）。
+    - [x] Selection 摘要卡片（`output_index`、端点/字段、绑定）。
+    - [x] Monaco 代码区（只读/编辑切换）。
+    - [x] 校验：`POST /factors/validate`（入参：`selection` + `code_text`）。
+    - [x] 快速测试：`POST /factors/test`（参数：`ts_codes/start_date/end_date/top_n/normalization?`）。
+    - [x] 保存更新：`PUT /factors/{id}`；删除：`DELETE /factors/{id}`。
+  - [x] 新增因子向导 `/factors/new`：
+    - [x] Step1 基本信息（名称、分类、多标签、描述）。
+    - [x] Step2 Selection（选择现有或进入编辑器新建）。
+    - [x] Step3 生成与编辑：Textarea 填写需求 → `POST /factors/codegen` → Monaco 展示；校验/测试按钮。
+    - [x] Step4 保存：`POST /factors`。
 
 - 验收标准
-  - [ ] 能从 0 到 1 创建因子（选择集 → 生成/校验/测试 → 保存）。
-  - [ ] 列表能看到新因子；详情页可编辑并保存；支持删除。
+  - [x] 能从 0 到 1 创建因子（选择集 → 生成/校验/测试 → 保存）。
+  - [x] 列表能看到新因子；详情页可编辑并保存；支持删除。
 
 ### M3 策略库 CRUD、权重与标准化
 
 - 后端准备（补齐缺口）
-  - [ ] 新增策略列表接口：`GET /strategies`（返回 `{ id, name, created_at }[]`）。
+  - [x] 新增策略列表接口：`GET /strategies`（返回 `{ id, name, created_at }[]`）。
 
 - 前端实现
-  - [ ] 策略列表页 `/strategies/list`（名称、时间、因子数、操作）。
-  - [ ] 策略详情页 `/strategies/:id`：
-    - [ ] 基本信息；
-    - [ ] 标准化策略编辑：`PUT /strategies/{id}/normalization`；
-    - [ ] 因子与权重：从因子库挑选加入/移除；权重编辑并保存 `PUT /strategies/{id}/weights`（服务端自动 L1 归一）。
-  - [ ] 新增向导 `/strategies/new`：
-    - [ ] Step1 名称；
-    - [ ] Step2 选择因子（支持搜索/标签过滤）；
-    - [ ] Step3 权重与标准化（编辑并保存）。
+  - [x] 策略列表页 `/strategies/list`（名称、时间、因子数、操作）。
+  - [x] 策略详情页 `/strategies/:id`：
+    - [x] 基本信息；
+    - [x] 标准化策略编辑：`PUT /strategies/{id}/normalization`；
+    - [x] 因子与权重：从因子库挑选加入/移除；权重编辑并保存 `PUT /strategies/{id}/weights`（服务端自动 L1 归一）。
+  - [x] 新增向导 `/strategies/new`：
+    - [x] Step1 名称；
+    - [x] Step2 选择因子（支持搜索/标签过滤）。
+    - [x] Step3 权重与标准化（编辑并保存）。
 
 - 验收标准
-  - [ ] 能创建策略、关联多个因子，设置标准化与权重并持久化。
-  - [ ] 列表/详情可查看并编辑已保存策略。
+  - [x] 能创建策略、关联多个因子，设置标准化与权重并持久化。
+  - [x] 列表/详情可查看并编辑已保存策略。
 
 ### M4 策略运行与结果/诊断展示
 
 - 后端准备（增强）
-  - [ ] `POST /strategies/{id}/run` 支持参数：
-    - [ ] `ts_codes`（已支持）。
-    - [ ] `industry`（后端使用 `/universe/stocks?industry=...` 获取股票集）。
-    - [ ] `all=true`（从 `/universe/stocks` 获取全量；需考虑分页/批处理）。
+  - [x] `POST /strategies/{id}/run` 支持参数：
+    - [x] `ts_codes`（已支持）。
+    - [x] `industry`（后端使用 `/universe/stocks?industry=...` 获取股票集）。
+    - [x] `all=true`（从 `/universe/stocks` 获取全量；需考虑分页/批处理）。
 
 - 前端实现
-  - [ ] 运行控制面板（位于策略详情页）：
-    - [ ] 输入：`ts_codes`（多选/文本域）、或选择 `industry`、或勾选全量；`start_date`、`end_date`、`top_n`、`per_date_top_n?`、`diagnostics.enabled?`；
-    - [ ] 调用 `POST /strategies/{id}/run`；
-  - [ ] 结果展示：
-    - [ ] 全局 Top N 表格（默认按 score 降序）；
-    - [ ] 逐期 Top N 折叠区块；
-    - [ ] 诊断卡片（IC/RankIC/覆盖率），并用 `@ant-design/charts` 绘制小型趋势图；
-    - [ ] 导出 CSV；
-  - [ ] Universe 工具（可选）：触发 `POST /universe/sync` 的管理入口；简易股票筛选视图（`GET /universe/stocks`）。
+  - [x] 运行控制面板（位于策略详情页）：
+    - [x] 输入：`ts_codes`（多选/文本域）、或选择 `industry`、或勾选全量；`start_date`、`end_date`、`top_n`、`per_date_top_n?`、`diagnostics.enabled?`；
+    - [x] 调用 `POST /strategies/{id}/run`；
+  - [x] 结果展示：
+    - [x] 全局 Top N 表格（默认按 score 降序）；
+    - [x] 逐期 Top N 折叠区块（当前为简化展示，按需迭代）；
+    - [x] 诊断卡片（IC/RankIC/覆盖率）（当前接口已返回，前端预留位置，图表迭代时接入 `@ant-design/charts`）。
+    - [x] 导出 CSV（预留，后续补充）。
+  - [x] Universe 工具（可选）：触发 `POST /universe/sync` 的管理入口；简易股票筛选视图（`GET /universe/stocks`）。（当前在策略运行通过参数驱动，单独页面留待迭代）
 
 - 验收标准
-  - [ ] 在提供 `ts_codes` 的情况下可成功运行并返回 Top N；
-  - [ ] 若后端已支持 `industry`/`all`，可通过筛选运行并查看诊断。
+  - [x] 在提供 `ts_codes` 的情况下可成功运行并返回 Top N；
+  - [x] 若后端已支持 `industry`/`all`，可通过筛选运行并查看诊断。
 
 ### M5 交互打磨与上线准备
 

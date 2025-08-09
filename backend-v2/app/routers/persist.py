@@ -11,6 +11,8 @@ from ..models.persist import (
     StrategyRecord,
     WeightsUpdate,
     NormalizationUpdate,
+    FactorUpdate,
+    StrategyListItem,
 )
 from ..storage.db import (
     insert_factor,
@@ -20,6 +22,10 @@ from ..storage.db import (
     get_strategy,
     upsert_strategy_weights,
     update_strategy_normalization,
+    update_factor,
+    delete_factor,
+    list_strategies,
+    query_stocks,
 )
 from ..services.sandbox import RestrictedSandbox
 from ..services.standardize import zscore_df
@@ -59,10 +65,43 @@ def get_factor_by_id(factor_id: int) -> Any:
     return rec
 
 
+@router.put("/factors/{factor_id}", response_model=Dict[str, Any])
+def update_factor_by_id(factor_id: int, body: FactorUpdate) -> Any:
+    # ensure exists
+    rec = get_factor(factor_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="factor not found")
+    update_factor(
+        factor_id,
+        name=body.name,
+        desc=body.desc,
+        code_text=body.code_text,
+        fields_used=body.fields_used,
+        normalization=body.normalization,
+        tags=body.tags,
+        selection=body.selection,
+    )
+    return {"ok": True}
+
+
+@router.delete("/factors/{factor_id}", response_model=Dict[str, Any])
+def delete_factor_by_id(factor_id: int) -> Any:
+    rec = get_factor(factor_id)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="factor not found")
+    delete_factor(factor_id)
+    return {"ok": True}
+
+
 @router.post("/strategies", response_model=Dict[str, Any])
 def create_strategy(body: StrategyCreate) -> Any:
     sid = insert_strategy(name=body.name, normalization=body.normalization)
     return {"id": sid}
+
+
+@router.get("/strategies", response_model=List[StrategyListItem])
+def list_strategies_endpoint() -> Any:
+    return list_strategies()
 
 
 @router.put("/strategies/{strategy_id}/weights", response_model=Dict[str, Any])
@@ -103,7 +142,19 @@ def run_strategy(strategy_id: int, body: Dict[str, Any]) -> Any:
     total = sum(abs(w.get("weight", 0.0)) for w in weights) or 1.0
     weights = [{"factor_id": w["factor_id"], "weight": float(w["weight"]) / total} for w in weights]
 
-    ts_codes: List[str] = body.get("ts_codes") or ["000001.SZ", "600000.SH"]
+    # Universe filtering: prioritize request-provided universe selection
+    ts_codes: List[str] = body.get("ts_codes") or []
+    industry: Optional[str] = body.get("industry")
+    want_all: bool = bool(body.get("all", False))
+    if not ts_codes:
+        if industry:
+            stocks = query_stocks({"industry": industry})
+            ts_codes = [s["ts_code"] for s in stocks if s.get("ts_code")]
+        elif want_all:
+            stocks = query_stocks({})
+            ts_codes = [s["ts_code"] for s in stocks if s.get("ts_code")]
+    if not ts_codes:
+        ts_codes = ["000001.SZ", "600000.SH"]
     start_date: str = body.get("start_date") or "20210101"
     end_date: str = body.get("end_date") or "20210108"
     top_n: int = int(body.get("top_n") or 5)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from .routers import health, catalog, selections, factors
 from .routers import standardize
@@ -17,6 +18,16 @@ def create_app() -> FastAPI:
     settings = load_settings()
     logger = setup_logging(settings.log_level)
     app = FastAPI(title="backend-v2", version="0.1.0")
+
+    # CORS
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     # DB
     init_db()
