@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 try:
     from dotenv import load_dotenv, dotenv_values
@@ -23,6 +24,8 @@ class Settings:
     ai_endpoint: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = None
+    # CORS
+    cors_origins: List[str] | None = None
 
 
 def load_settings() -> Settings:
@@ -62,6 +65,19 @@ def load_settings() -> Settings:
         # Provide a sensible default model for DashScope if none supplied
         ai_model = "qwen3-coder-plus"
 
+    # CORS origins: comma-separated
+    def _parse_origins(text: str | None) -> List[str] | None:
+        if text is None:
+            return None
+        cleaned = [o.strip() for o in text.split(",") if o.strip()]
+        return cleaned or None
+
+    default_dev_origins = [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ]
+    cors_origins = _parse_origins(os.getenv("CORS_ORIGINS")) or default_dev_origins
+
     return Settings(
         tushare_token=token_from_env_files or os.getenv("TUSHARE_TOKEN"),
         cache_ttl_hours=_get_int("CACHE_TTL_HOURS", 24),
@@ -72,4 +88,5 @@ def load_settings() -> Settings:
         ai_endpoint=ai_endpoint,
         ai_api_key=ai_api_key,
         ai_model=ai_model,
+        cors_origins=cors_origins,
     )
