@@ -19,6 +19,10 @@ class FactorRecord(FactorCreate):
     created_at: str
 
 
+class FactorUpdate(FactorCreate):
+    pass
+
+
 class StrategyCreate(BaseModel):
     name: str
     normalization: Optional[Dict[str, Any]] = None
@@ -30,6 +34,12 @@ class StrategyRecord(BaseModel):
     normalization: Optional[Dict[str, Any]] = None
     created_at: str
     weights: List[Dict[str, float]] = Field(default_factory=list)
+
+
+class StrategyListItem(BaseModel):
+    id: int
+    name: str
+    created_at: str
 
 
 class WeightItem(BaseModel):

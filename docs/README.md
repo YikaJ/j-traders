@@ -7,7 +7,6 @@
   - [roadmap.md](./roadmap.md)
 - 数据与目录
   - [catalog.md](./catalog.md)
-  - [selections.md](./selections.md)
   - [universe.md](./universe.md)
 - 编码与因子
   - [agent_codegen.md](./agent_codegen.md)

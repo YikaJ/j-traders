@@ -20,9 +20,9 @@
 顶层导航与路由：
 - `/dashboard`（大盘监控）— 本期仅占位骨架（导航 + 空态/说明）。
 - `/factors`（因子库）
-  - `/factors/list` 因子列表
-  - `/factors/new` 新增因子（向导）
-  - `/factors/:id` 因子详情（查看/编辑/删除）
+- `/factors/list` 因子列表
+- `/factors/new` 新增因子（向导）
+- `/factors/:id` 因子详情（查看/编辑/删除）
 - `/strategies`（策略库）
   - `/strategies/list` 策略列表
   - `/strategies/new` 新增策略（向导）
@@ -39,7 +39,7 @@
 ## 因子库（Factors）
 
 ### 列表页 `/factors/list`
-- 目标：快速浏览自己创建过的因子，查看分类（Category）、关联选择集（Selection）、使用字段与创建时间。
+- 目标：快速浏览自己创建过的因子，查看分类（Category）、使用字段与创建时间。
 - 数据来源：`GET /factors`（后端：`persist.router.get_factors`）。
 - 表格字段（建议）：
   - 名称（`name`）
@@ -57,7 +57,7 @@
 - 数据来源：`GET /factors/{id}`。
 - 结构：
   - 基本信息：名称、分类（tags）、描述。
-  - 选择集（Selection）预览：以可读卡片展示 `output_index`、所含 endpoint/fields、`param_binding` 概要。
+- 数据选择摘要：以卡片展示 `join_keys`、所含 endpoint/fields、参数绑定概要。
   - 代码编辑：Monaco Editor 展示 `code_text`，只读/编辑切换。
   - 快速校验：按钮触发 `POST /factors/validate`（入参：`selection` + `code_text`）。
   - 快速测试：
@@ -74,15 +74,10 @@
   - 名称（必填）
   - 分类（Category）：多选标签（对应后端 `tags`）
   - 描述（可选）
-- Step 2 选择集（Selections）
-  - 选择已有 Selection：
-    - 下拉选择 `selection_slug`（来源 `GET /catalog/selections`）；
-    - 详情预览（`GET /catalog/selections/{slug}`）。
-  - 或创建新的 Selection：可视化“选择集编辑器”（见下文“Selections 在前端的呈现”）。
-- Step 3 因子代码生成（Coding Agent 协作）
+- Step 2 因子代码生成（Coding Agent 协作）
   - “需求说明”文本区域（Textarea），用于书写 `user_factor_spec`；
   - 点击“生成代码”→ 调用 `POST /factors/codegen`：
-    - 入参：`selection_slug` 或完整 `selection`、`user_factor_spec`、`coding_prefs?`；
+    - 入参：`selection`（临时数据选择 JSON）、`user_factor_spec`、`coding_prefs?`；
     - 返回：`{ code_text, fields_used, notes }`；
   - 生成后在 Monaco Editor 中展示/可编辑；
   - “校验”→ `POST /factors/validate`；
@@ -91,26 +86,7 @@
   - `POST /factors`：提交 `name/desc/code_text/fields_used/tags/selection/normalization?`；
   - 成功后跳转 `/factors/:id`。
 
-#### Selections 在前端的呈现（建议实现）
-
-Selections 是“因子数据输入契约”的前置勾选，包含：数据源端点、字段、`param_binding`、输出索引等。前端提供两种视图：
-
-1) 选择现有规范（简单模式）
-- 直接选择 `selection_slug`；展示卡片化摘要：
-  - `output_index`（如 `["ts_code","trade_date"]`）
-  - 端点与字段（如 `daily_basic`: `pe_ttm`, `pb`）
-  - 参数绑定摘要（从请求/固定/派生而来）
-
-2) 可视化编辑器（进阶模式）
-- 多段式表单：
-  - 选择端点：数据来源 `GET /catalog/endpoints`（名称/描述/频率/轴/示例）。
-  - 勾选字段：从端点字段清单中多选；可关键词搜索（如 `pe_ttm`）。
-  - 参数绑定：为 `start_date/end_date/ts_code/period` 等设置“绑定来源”（固定值/来自请求参数/派生）。
-  - 输出索引：选择 `[ts_code, trade_date]` 或 `[ts_code, end_date]`。
-  - 连接键（join_keys）：多端点时声明对齐字段。
-- 保存为 selection JSON（允许“另存为”），并持久化 `POST /catalog/selections`（后端已支持）。
-
-注意：后端因子执行与校验都依赖 selection。以此方式，用户无需直接编辑 JSON，也能完成选择集构建；同时保留“高级/JSON”切换，供资深用户直接编辑原始 JSON。
+（已移除）选择集持久化：当前阶段不再提供，改为在因子创建流程内临时选择数据并直连 Agent/后端。
 
 ---
 

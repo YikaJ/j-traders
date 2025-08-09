@@ -1,7 +1,7 @@
 ## 编码代理（Coding Agent）
 
 ### 上下文构建器（Context Builder）
-- 汇总端点/字段、`output_index`、约束与允许/禁止的能力集。
+- 汇总端点/字段、`join_keys`、约束与允许/禁止的能力集。
 - 由 `build_agent_context(selection)` 生成，作为 LLM 的 `user` 消息部分内容。
 
 ### 对接与配置（OpenAI 兼容 + Qwen/DashScope）
@@ -15,7 +15,7 @@
 
 ### 生成流程
 1) 构建消息（system + user）
-- system：约束 `compute_factor` 的函数签名与安全边界（仅用 numpy/pandas，不得 IO/网络/子进程/反射/动态导入等），并要求返回包含 `factor` 列、保留 `output_index` 的 DataFrame。
+- system：约束 `compute_factor` 的函数签名与安全边界（仅用 numpy/pandas，不得 IO/网络/子进程/反射/动态导入等），并要求返回包含 `factor` 列、保留 `join_keys` 的 DataFrame。
 - user：注入结构化上下文（selection 与 endpoints 元数据）与 `USER_FACTOR_SPEC`，并强调“仅返回 Python 代码、无解释/注释/Markdown”。
 
 2) 调用 LLM（可透传 `coding_prefs`）
@@ -33,33 +33,21 @@
 - 位置：`backend-v2/app/prompts/FactorCoder.md`
 - 作用：作为 `system` 消息模板，统一约束生成规范，减少提示词漂移。
 - 占位符（生成时由后端替换）：
-  - `{{SELECTION_CONTEXT_JSON}}`：从 selections 构建的上下文 JSON（含 endpoints 元数据、约束、允许库等）
+  - `{{SELECTION_CONTEXT_JSON}}`：从数据选择构建的上下文 JSON（含 endpoints 元数据、约束、允许库等）
   - `{{USER_FACTOR_SPEC}}`：预留给用户填写的因子需求说明
-  - `{{ALLOWED_FIELDS}}`：从选择集聚合的可用字段清单
-  - `{{OUTPUT_INDEX}}`：选择集声明的输出索引
+  - `{{ALLOWED_FIELDS}}`：从数据选择聚合的可用字段清单
+  - `{{OUTPUT_INDEX}}`：数据选择声明的联接键（join_keys）
 - 回退机制：若模板文件缺失，使用内置的安全 system 提示词（同样仅返回纯代码）。
 
 ### API
 - `POST /factors/codegen`
   - 入参：
-    - `selection` 或 `selection_slug`
+    - `selection`（数据选择 spec）
     - `user_factor_spec`（文本）
     - `coding_prefs?`：`{ model?, temperature?, max_tokens?, extra? }`
   - 返回：`{ code_text, fields_used, notes }`
 
-示例（Qwen/DashScope）：
-```bash
-curl -X POST http://127.0.0.1:8000/factors/codegen \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "selection_slug": "val_low_combo",
-    "user_factor_spec": "neutral",
-    "coding_prefs": {
-      "model": "qwen3-coder-plus",
-      "extra": { "enable_thinking": false }
-    }
-  }'
-```
+示例（Qwen/DashScope 兼容）：参考接口文档 `docs/api.md`，请求体须传入 selection JSON。
 
 ### 测试与验收
 - 覆盖内容：

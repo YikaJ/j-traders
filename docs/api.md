@@ -8,17 +8,13 @@
 - GET `/catalog/endpoints/{name}`
 - GET `/catalog/fields/search?q=keyword`
 
-选择集（Selections）
-- POST `/catalog/selections`
-- PUT `/catalog/selections/{slug}`
-- GET `/catalog/selections`
-- GET `/catalog/selections/{slug}`
+（已移除）选择集相关接口在本阶段不再提供
 
 因子（Factors）
-- POST `/factors/codegen`
-- POST `/factors/validate`
-- POST `/factors/sample`
-- POST `/factors/test`
+- POST `/factors/codegen`（请求体须携带数据选择 spec，即临时 selection）
+- POST `/factors/validate`（请求体须携带数据选择 spec）
+- POST `/factors/sample`（请求体须携带数据选择 spec）
+- POST `/factors/test`（请求体须携带数据选择 spec）
 - POST `/factors`
 - GET `/factors`
 - GET `/factors/{id}`

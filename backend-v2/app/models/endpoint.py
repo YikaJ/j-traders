@@ -14,7 +14,7 @@ class EndpointParam(BaseModel):
 class EndpointField(BaseModel):
     name: str
     dtype: Literal["string", "int", "float", "date"]
-    role: Literal["identifier", "timestamp", "measure"]
+    role: Literal["identifier", "timestamp", "measure", "attribute"]
     desc: Optional[str] = None
     measure_kind: Optional[str] = None
     unit: Optional[str] = None
@@ -30,6 +30,8 @@ class RateLimit(BaseModel):
 class EndpointMeta(BaseModel):
     name: str
     description: Optional[str] = None
+    update_time: Optional[str] = None
+    notes: Optional[str] = None
     source: str
     sdk: dict
     axis: str

@@ -16,47 +16,25 @@ def main() -> int:
     app = create_app()
     client = TestClient(app)
 
-    # 选择集：使用 daily_basic，字段包含股息率TTM、总市值、PE_TTM
+    # 数据选择（无需持久化）：使用 daily_basic，字段包含股息率TTM、总市值、PE_TTM
     selection: Dict[str, Any] = {
-        "factor_slug": "consumer_value_single",
-        "title": "消费偏好-高股息/大市值/低PE（单因子）",
-        "output_index": ["ts_code", "trade_date"],
-        "selection": [
+        "join_keys": ["ts_code", "trade_date"],
+        "sources": [
             {
                 "endpoint": "daily_basic",
-                "fields": [
-                    "ts_code",
-                    "trade_date",
-                    "dv_ttm",
-                    "total_mv",
-                    "pe_ttm",
-                ],
-                "param_binding": {
-                    "start_date": {"type": "request_arg", "name": "start_date"},
-                    "end_date": {"type": "request_arg", "name": "end_date"},
-                },
-                "join_keys": ["ts_code", "trade_date"],
+                "fields": ["ts_code", "trade_date", "dv_ttm", "total_mv", "pe_ttm"],
+                "params": {"start_date": {"type": "arg"}, "end_date": {"type": "arg"}}
             }
         ],
-        "alignment": [],
-        "constraints": {"winsor": [0.01, 0.99], "zscore_axis": "trade_date"},
-        "code_contract": {
-            "signature": "def compute_factor(data: dict[str, pd.DataFrame], params: dict) -> pd.DataFrame",
-            "data_keys": ["daily_basic"],
-        },
+        "constraints": {"winsor": [0.01, 0.99], "zscore_axis": "trade_date"}
     }
 
     # 通过 LLM 进行代码生成（若未配置 AI，将自动回退脚手架）
     factor_spec = (
         "请生成以 daily_basic 为输入的单因子：偏好‘股息率高(dv_ttm)’、‘总市值大(total_mv)’、‘市盈率低(pe_ttm)’。"
-        "函数签名遵循系统约束，仅返回包含 'factor' 列且保留 output_index 的 DataFrame。"
+        "函数签名遵循系统约束，仅返回包含 'factor' 列且保留 join_keys 的 DataFrame。"
     )
-    cg = client.post("/factors/codegen", json={
-        "selection": selection,
-        "user_factor_spec": factor_spec,
-        # 示例采用 DashScope/Qwen 兼容设置时可透传 extra；若未设置将使用默认模型
-        "coding_prefs": {"extra": {"enable_thinking": False}},
-    })
+    cg = client.post("/factors/codegen", json={"selection": selection, "user_factor_spec": factor_spec, "coding_prefs": {}})
     if cg.status_code != 200:
         print("[FAIL] codegen:", cg.status_code, cg.text)
         return 1

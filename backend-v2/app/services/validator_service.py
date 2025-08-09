@@ -11,7 +11,7 @@ IGNORED_TOKENS: Set[str] = {"factor", "key"}
 
 
 def validate_code_against_selection(code_text: str, spec: SelectionSpec) -> Dict[str, Any]:
-    context = build_agent_context(spec)
+    build_agent_context(spec)  # currently not used directly but validates selection and loads endpoints
     allowed_imports: Set[str] = set(["pandas", "numpy"])  # from context
 
     validator = FactorAstValidator(allowed_imports=allowed_imports)
@@ -23,10 +23,8 @@ def validate_code_against_selection(code_text: str, spec: SelectionSpec) -> Dict
     for fields in endpoint_to_fields.values():
         allowed_fields.update(fields)
 
-    allowed_non_field_tokens: Set[str] = set(spec.output_index)
+    allowed_non_field_tokens: Set[str] = set(spec.join_keys)
     allowed_non_field_tokens.update(IGNORED_TOKENS)
-    # Treat data keys as dataset identifiers, not fields
-    allowed_non_field_tokens.update(set(spec.code_contract.data_keys))
 
     boundary_errors: List[str] = []
     for f in res.fields_used:

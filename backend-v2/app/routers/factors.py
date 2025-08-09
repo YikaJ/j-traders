@@ -17,7 +17,6 @@ from ..models.factor import (
 )
 from ..models.selection import SelectionSpec
 from ..services.context_builder import (
-    load_selection_by_slug,
     gather_selection_fields,
     build_agent_context,
     load_endpoint_meta,
@@ -44,16 +43,7 @@ def _flatten_fields(fields_map: dict[str, set[str]]) -> List[str]:
 @router.post("/sample", response_model=SampleResponse)
 def sample_data(req: SampleRequest) -> Any:
     # 自动按 selection 抓取真实样本（带缓存），失败则回退合成（带扰动）
-    if req.selection is None and not req.selection_slug:
-        raise HTTPException(status_code=400, detail="selection or selection_slug is required")
-    spec: SelectionSpec
-    if req.selection is not None:
-        spec = req.selection
-    else:
-        try:
-            spec = load_selection_by_slug(req.selection_slug or "")
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="selection slug not found")
+    spec: SelectionSpec = req.selection
 
     tickers = req.ts_codes or ["000001.SZ", "600000.SH"]
     dates = [req.start_date or "20210101", req.end_date or "20210108"]
@@ -67,7 +57,7 @@ def sample_data(req: SampleRequest) -> Any:
     out: Dict[str, List[Dict[str, Any]]] = {}
     notes: List[str] = []
 
-    for item in spec.selection:
+    for item in spec.sources:
         df: pd.DataFrame | None = None
         if ts_client is not None:
             try:
@@ -79,11 +69,11 @@ def sample_data(req: SampleRequest) -> Any:
                     base_params["end_date"] = req.end_date
                 pulled = ts_client.fetch_iter_ts_codes(meta, base_params, tickers)
                 if pulled is not None and not pulled.empty:
-                    need_cols = set(item.fields + spec.output_index)
+                    need_cols = set(item.fields + spec.join_keys)
                     present = [c for c in pulled.columns if c in need_cols]
                     if present:
                         df = pulled[present].copy()
-                        if not set(spec.output_index).issubset(set(df.columns)):
+                        if not set(spec.join_keys).issubset(set(df.columns)):
                             df = None
             except Exception as e:  # noqa: BLE001
                 notes.append(f"fetch failed for {item.endpoint}: {e}")
@@ -114,17 +104,7 @@ def sample_data(req: SampleRequest) -> Any:
 
 @router.post("/codegen", response_model=CodegenResponse)
 def codegen(req: CodegenRequest) -> Any:
-    # resolve selection
-    spec: SelectionSpec | None = None
-    if req.selection is not None:
-        spec = req.selection
-    elif req.selection_slug:
-        try:
-            spec = load_selection_by_slug(req.selection_slug)
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="selection slug not found")
-    else:
-        raise HTTPException(status_code=400, detail="selection or selection_slug is required")
+    spec: SelectionSpec = req.selection
 
     fields_map = gather_selection_fields(spec)
     fields_used = _flatten_fields(fields_map)
@@ -146,8 +126,6 @@ def codegen(req: CodegenRequest) -> Any:
 
 @router.post("/validate", response_model=ValidateResponse)
 def validate(req: ValidateRequest) -> Any:
-    if req.selection is None:
-        raise HTTPException(status_code=400, detail="selection is required for validation in MVP")
     spec: SelectionSpec = req.selection
 
     result = validate_code_against_selection(req.code_text, spec)
@@ -164,9 +142,7 @@ def validate(req: ValidateRequest) -> Any:
 
 @router.post("/test", response_model=TestResponse)
 def test_factor(req: TestRequest) -> Any:
-    # MVP: simulate small sample data from selection, execute code in sandbox, then preview zscore
-    if req.selection is None:
-        raise HTTPException(status_code=400, detail="selection is required for test in MVP")
+    # simulate small sample data from selection, execute code in sandbox, then preview zscore
     spec: SelectionSpec = req.selection
 
     # 1) build small sample per endpoint: prefer TuShare (cached); fallback to synthetic with perturbation
@@ -181,7 +157,7 @@ def test_factor(req: TestRequest) -> Any:
     except Exception:
         ts_client = None
 
-    for item in spec.selection:
+    for item in spec.sources:
         df: pd.DataFrame | None = None
         if ts_client is not None:
             try:
@@ -193,11 +169,11 @@ def test_factor(req: TestRequest) -> Any:
                     base_params["end_date"] = req.end_date
                 pulled = ts_client.fetch_iter_ts_codes(meta, base_params, tickers)
                 if pulled is not None and not pulled.empty:
-                    need_cols = set(item.fields + spec.output_index)
+                    need_cols = set(item.fields + spec.join_keys)
                     present = [c for c in pulled.columns if c in need_cols]
                     if present:
                         df = pulled[present].copy()
-                        if not set(spec.output_index).issubset(set(df.columns)):
+                        if not set(spec.join_keys).issubset(set(df.columns)):
                             df = None
             except Exception:
                 df = None
@@ -207,7 +183,7 @@ def test_factor(req: TestRequest) -> Any:
             for ts in tickers:
                 for d in dates:
                     row: Dict[str, Any] = {}
-                    for f in set(item.fields + spec.output_index):
+                    for f in set(item.fields + spec.join_keys):
                         if f == "ts_code":
                             row[f] = ts
                         elif f in ("trade_date", "end_date"):
@@ -231,7 +207,7 @@ def test_factor(req: TestRequest) -> Any:
     # 3) standardization preview (zscore)
     norm = req.normalization
     if norm is not None:
-        by = norm.by or spec.output_index[-1:]
+        by = norm.by or spec.join_keys[-1:]
         out_df = zscore_df(out_df, value_col="factor", by=by, winsor=norm.winsor, fill=norm.fill)
 
     # 4) diagnosis

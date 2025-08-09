@@ -7,8 +7,7 @@ from .selection import SelectionSpec
 
 
 class CodegenRequest(BaseModel):
-    selection_slug: Optional[str] = None
-    selection: Optional[SelectionSpec] = None
+    selection: SelectionSpec
     user_factor_spec: str
     coding_prefs: Optional[Dict[str, Any]] = None
 
@@ -22,7 +21,7 @@ class CodegenResponse(BaseModel):
 class ValidateRequest(BaseModel):
     code_text: str
     required_fields: Optional[List[str]] = None
-    selection: Optional[SelectionSpec] = None
+    selection: SelectionSpec
 
 
 class ValidateResponse(BaseModel):
@@ -39,8 +38,7 @@ class TestNormalization(BaseModel):
 
 
 class TestRequest(BaseModel):
-    selection_slug: Optional[str] = None
-    selection: Optional[SelectionSpec] = None
+    selection: SelectionSpec
     code_text: str
     params: Dict[str, Any] = Field(default_factory=dict)
     ts_codes: List[str] = Field(default_factory=list)
@@ -64,8 +62,7 @@ class TestResponse(BaseModel):
 
 
 class SampleRequest(BaseModel):
-    selection_slug: Optional[str] = None
-    selection: Optional[SelectionSpec] = None
+    selection: SelectionSpec
     ts_codes: List[str] = Field(default_factory=list)
     start_date: Optional[str] = None
     end_date: Optional[str] = None
