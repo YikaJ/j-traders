@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Divider, Flex, Form, Input, Select, Space, Steps, Tag, Typography, message } from 'antd'
+import { Button, Card, Form, Input, Select, Space, Steps, Tag, Typography, message, Table } from 'antd'
 import type { SelectProps } from 'antd'
 import Editor from '@monaco-editor/react'
 import { http } from '../../api/client'
@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom'
 type EndpointMeta = {
   name: string
   axis?: string
+  description?: string
   fields?: { name: string; desc?: string }[]
   params?: { name: string; type: string; required?: boolean; desc?: string }[]
 }
@@ -55,8 +56,25 @@ function SourceEditor({ idx, value, onChange, endpointMeta }: { idx: number; val
   const [local, setLocal] = useState<SourceState>(value)
   useEffect(() => setLocal(value), [value])
   const fieldsOptions: SelectProps['options'] = (endpointMeta?.fields || []).map(f => ({ value: f.name, label: `${f.name}${f?.desc ? ` (${f.desc})` : ''}` }))
-  const paramsList = (endpointMeta?.params || []).map(p => ({ name: p.name, desc: p.desc }))
+  const allParams = (endpointMeta?.params || [])
+  const requiredParams = allParams.filter(p => p.required).map(p => ({ name: p.name, desc: p.desc }))
+  const optionalParams = allParams.filter(p => !p.required).map(p => ({ name: p.name, desc: p.desc }))
   const ensureParam = (k: string) => setLocal(prev => ({ ...prev, params: { ...prev.params, [k]: prev.params?.[k] || { type: 'arg' } } }))
+  // auto include required params
+  useEffect(() => {
+    if (!endpointMeta) return
+    setLocal(prev => {
+      const next = { ...prev, params: { ...prev.params } }
+      let changed = false
+      requiredParams.forEach(r => { if (!next.params[r.name]) { next.params[r.name] = { type: 'arg' }; changed = true } })
+      if (changed) onChange(next)
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpointMeta?.name])
+
+  const selectedOptional = Object.keys(local.params || {}).filter(k => !requiredParams.find(r => r.name === k))
+  const addableOptions = optionalParams.filter(op => !selectedOptional.includes(op.name)).map(op => ({ value: op.name, label: `${op.name}${op.desc ? ` (${op.desc})` : ''}` }))
 
   return (
     <Card size="small" title={`数据源 #${idx + 1}`}
@@ -94,34 +112,31 @@ function SourceEditor({ idx, value, onChange, endpointMeta }: { idx: number; val
           />
         </div>
         <div>
-          <Typography.Text>参数绑定</Typography.Text>
+          <Typography.Text>参数（仅保留必填，可按需添加可选项）</Typography.Text>
           <div style={{ marginTop: 6 }}>
-            {paramsList.map(({ name: k, desc }) => {
-              const binding = local.params?.[k]
+            {/* required params (non-removable) */}
+            {requiredParams.map(({ name: k, desc }) => (
+              <Tag key={`req-${k}`} color="blue" style={{ marginBottom: 6 }}>{`${k}${desc ? ` (${desc})` : ''}`}</Tag>
+            ))}
+            {/* selected optional params (removable) */}
+            {selectedOptional.map(k => {
+              const meta = optionalParams.find(op => op.name === k)
+              const label = `${k}${meta?.desc ? ` (${meta.desc})` : ''}`
               return (
-                <Flex key={k} align="center" gap={8} style={{ marginBottom: 6 }}>
-                  <Tag>{`${k}${desc ? ` (${desc})` : ''}`}</Tag>
-                  <Select
-                    value={binding?.type || 'arg'}
-                    options={[
-                      { value: 'arg', label: '请求参数' },
-                      { value: 'fixed', label: '固定值' },
-                    ]}
-                    style={{ width: 96 }}
-                    onChange={(t) => { ensureParam(k); const next = { ...local, params: { ...local.params, [k]: { type: t as 'arg' | 'fixed' } } }; setLocal(next); onChange(next) }}
-                  />
-                  {binding?.type === 'fixed' ? (
-                    <Input placeholder="固定值"
-                      style={{ width: 240 }}
-                      value={binding?.value as any}
-                      onChange={(e) => { const next = { ...local, params: { ...local.params, [k]: { type: 'fixed', value: e.target.value } } }; setLocal(next); onChange(next) }} />
-                  ) : (
-                    <Typography.Text type="secondary">来自请求参数</Typography.Text>
-                  )}
-                </Flex>
+                <Tag key={`opt-${k}`} closable onClose={(e) => { e.preventDefault(); setLocal(prev => { const next = { ...prev, params: { ...prev.params } }; delete next.params[k]; onChange(next); return next }) }} style={{ marginBottom: 6 }}>{label}</Tag>
               )
             })}
-            {paramsList.length === 0 ? <Typography.Text type="secondary">该端点无可配置参数</Typography.Text> : null}
+            {/* add optional param */}
+            <div style={{ marginTop: 6 }}>
+              <Select
+                placeholder="添加可选参数"
+                style={{ width: 260 }}
+                options={addableOptions}
+                value={undefined as any}
+                onChange={(name) => { ensureParam(name as string); onChange({ ...local, params: { ...local.params, [name as string]: { type: 'arg' } } }) }}
+                showSearch
+              />
+            </div>
           </div>
         </div>
       </Space>
@@ -149,6 +164,28 @@ export default function FactorNewPage() {
   const [startDate, setStartDate] = useState('20210101')
   const [endDate, setEndDate] = useState('20210108')
   const [topN, setTopN] = useState(5)
+  // 动态参数输入：根据 sources 中声明为 arg 的参数，联动生成输入框
+  const argParamNames = useMemo(() => {
+    const names = new Set<string>()
+    for (const s of sel.sources || []) {
+      for (const [k, v] of Object.entries(s.params || {})) {
+        if ((v as any)?.type === 'arg') names.add(k)
+      }
+    }
+    return Array.from(names)
+  }, [sel])
+  const [argInputs, setArgInputs] = useState<Record<string, string>>({})
+  useEffect(() => {
+    // 清理已移除的 key
+    setArgInputs(prev => {
+      const next: Record<string, string> = {}
+      argParamNames.forEach(k => { next[k] = prev[k] || '' })
+      return next
+    })
+  }, [argParamNames])
+  const [sampleLoading, setSampleLoading] = useState(false)
+  const [sampleData, setSampleData] = useState<Record<string, any[]>>({})
+  const [sampleNotes, setSampleNotes] = useState<string>('')
 
   useEffect(() => { fetchList() }, [])
 
@@ -156,6 +193,36 @@ export default function FactorNewPage() {
     () => endpoints.map((e: any) => ({ value: e.name, label: `${e.name}${e?.description ? ` (${e.description})` : ''}` })),
     [endpoints]
   )
+
+  // Join-key candidates based on selected endpoints' axis and timestamp-like fields
+  const candidateJoinKeys = useMemo(() => {
+    const keys = new Set<string>(['ts_code'])
+    for (const s of sel.sources || []) {
+      const meta = s.endpoint ? endpointMetaMap[s.endpoint] : undefined
+      const axis = meta?.axis
+      if (axis) keys.add(axis)
+      const flds: any[] = (meta?.fields as any[]) || []
+      for (const f of flds) {
+        const name = (f as any)?.name
+        const role = (f as any)?.role
+        if (!name) continue
+        if (role === 'timestamp' || name.endsWith('_date')) keys.add(name)
+      }
+    }
+    return Array.from(keys)
+  }, [sel.sources, endpointMetaMap])
+  const joinKeyOptions = useMemo(() => candidateJoinKeys.map(k => ({ value: k, label: k })), [candidateJoinKeys])
+
+  // Auto align join_keys to axis when user still using default ['ts_code','trade_date']
+  useEffect(() => {
+    const axes = Array.from(new Set((sel.sources || []).map(s => s.endpoint ? endpointMetaMap[s.endpoint]?.axis : null).filter(Boolean))) as string[]
+    if (axes.length === 0) return
+    const preferred = axes.includes('end_date') ? 'end_date' : (axes.includes('trade_date') ? 'trade_date' : axes[0])
+    const isDefault = JSON.stringify(sel.join_keys) === JSON.stringify(['ts_code','trade_date'])
+    if (isDefault && preferred && preferred !== sel.join_keys[1]) {
+      setSel(prev => ({ ...prev, join_keys: ['ts_code', preferred] }))
+    }
+  }, [sel.sources, endpointMetaMap])
 
   const addSource = async () => {
     const endpoint = endpoints[0]?.name
@@ -182,12 +249,14 @@ export default function FactorNewPage() {
     setSel({ ...sel, sources })
   }
 
+  const activeSources = useMemo(() => (sel.sources || []).filter(s => !!s.endpoint && (s.fields || []).length > 0), [sel])
+
   const buildSelectionSpec = () => ({
     slug: sel.slug || 'temp',
     title: sel.title || 'temp',
     description: sel.description,
     join_keys: sel.join_keys,
-    sources: sel.sources.map(s => ({ endpoint: s.endpoint!, fields: s.fields, params: s.params })),
+    sources: activeSources.map(s => ({ endpoint: s.endpoint!, fields: s.fields, params: s.params })),
     constraints: sel.constraints,
     params_schema: sel.params_schema || {},
   })
@@ -204,7 +273,6 @@ export default function FactorNewPage() {
       const { data } = await http.post('/factors/codegen', { selection, user_factor_spec: spec })
       setCode(data.code_text || '')
       message.success('已生成代码')
-      setStep(1)
     } catch (e: any) {
       message.error('生成失败：' + (e?.message || ''))
     } finally { setGenLoading(false) }
@@ -241,6 +309,22 @@ export default function FactorNewPage() {
     } finally { setPreviewing(false) }
   }
 
+  const onSample = async () => {
+    try {
+      setSampleLoading(true)
+      const selection = buildSelectionSpec()
+      const { data } = await http.post('/factors/sample', {
+        selection,
+        top_n: topN,
+        request_args: argInputs,
+      })
+      setSampleData(data.data || {})
+      setSampleNotes(data.notes || '')
+    } catch (e: any) {
+      message.error('预调用失败：' + (e?.message || ''))
+    } finally { setSampleLoading(false) }
+  }
+
   const navigateToDetail = (id: number) => navigate(`/factors/${id}`)
 
   const onSave = async (values: any) => {
@@ -273,26 +357,8 @@ export default function FactorNewPage() {
       />
 
       {step === 0 && (
-        <Card size="small" title="数据选择（源/字段/参数/对齐键）与需求说明">
+        <Card size="small" title="数据选择（源/字段/参数）与需求说明">
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Card size="small" title="对齐键（join_keys）">
-              <Typography.Paragraph type="secondary">建议使用 ts_code 与时间列（如 trade_date）。</Typography.Paragraph>
-              <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-                用途：
-                <br />- 在合并多个数据源时，作为主键进行对齐（inner join）。
-                <br />- 生成的 compute_factor 必须保留这些列作为输出索引。
-                <br />- 标准化/分组处理默认按最后一个键分组（例如按 trade_date 做截面）。
-              </Typography.Paragraph>
-              <Select
-                mode="tags"
-                style={{ width: 480 }}
-                value={sel.join_keys}
-                onChange={(v) => setSel({ ...sel, join_keys: v as string[] })}
-                tokenSeparators={[',', ' ']}
-                placeholder="输入并回车添加"
-              />
-            </Card>
-
             <Card size="small" title="数据源（sources）">
               <Space direction="vertical" style={{ width: '100%' }}>
                 {sel.sources.map((s, i) => (
@@ -307,6 +373,56 @@ export default function FactorNewPage() {
                 <Button type="dashed" onClick={addSource}>+ 添加数据源</Button>
               </Space>
             </Card>
+
+            <Card size="small" title="对齐键（join_keys）">
+              <Typography.Paragraph type="secondary">建议使用 ts_code 与时间列（如 end_date / trade_date）。</Typography.Paragraph>
+              <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                用途：
+                <br />- 在合并多个数据源时，作为主键进行对齐（inner join）。
+                <br />- 生成的 compute_factor 必须保留这些列作为输出索引。
+                <br />- 标准化/分组处理默认按最后一个键分组。
+              </Typography.Paragraph>
+              <Select
+                mode="tags"
+                style={{ width: 480 }}
+                value={sel.join_keys}
+                onChange={(v) => setSel({ ...sel, join_keys: v as string[] })}
+                tokenSeparators={[',', ' ']}
+                placeholder="输入并回车添加"
+                options={joinKeyOptions}
+              />
+            </Card>
+
+            <Card size="small" title="数据预调用">
+              <Space wrap style={{ marginBottom: 8 }}>
+                <Input addonBefore="top_n" style={{ width: 160 }} value={topN} onChange={e=>setTopN(parseInt(e.target.value||'5'))} />
+                {argParamNames.map(name => (
+                  <Input key={name} addonBefore={name} style={{ width: 200 }} value={argInputs[name]}
+                    onChange={e=>setArgInputs(prev=>({ ...prev, [name]: e.target.value }))} />
+                ))}
+                <Button type="primary" onClick={onSample} loading={sampleLoading} disabled={activeSources.length===0 || sel.join_keys.length===0}>
+                  预调用数据
+                </Button>
+              </Space>
+              {sampleNotes ? <Typography.Paragraph type="secondary" style={{ marginTop: 0, marginBottom: 8 }}>备注：{sampleNotes}</Typography.Paragraph> : null}
+              {Object.keys(sampleData || {}).length === 0 ? (
+                <Typography.Text type="secondary">点击“预调用数据”以查看各数据源的样例结果</Typography.Text>
+              ) : (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {Object.entries(sampleData).map(([endpoint, rows]) => {
+                    const dataSource = (rows as any[]) || []
+                    const columns = dataSource.length > 0 ? Object.keys(dataSource[0]).map(k => ({ title: k, dataIndex: k, key: k })) : []
+                    return (
+                      <div key={endpoint}>
+                        <Typography.Title level={5} style={{ marginTop: 8 }}>{endpoint}</Typography.Title>
+                        <Table size="small" rowKey={(_, i) => String(i)} dataSource={dataSource} columns={columns as any} pagination={{ pageSize: 5 }} />
+                      </div>
+                    )
+                  })}
+                </Space>
+              )}
+            </Card>
+
 
             <Card size="small" title="需求说明与代码生成">
               <Space.Compact style={{ width: '100%', marginBottom: 8 }}>

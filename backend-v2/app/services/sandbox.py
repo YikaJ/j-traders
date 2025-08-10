@@ -64,8 +64,10 @@ class RestrictedSandbox:
         builtins_dict: Dict[str, Any] = dict(self.safe_builtins)
         builtins_dict["__import__"] = self._guard_import
         g: Dict[str, Any] = {"__builtins__": builtins_dict}
-        # provide modules
+        # provide modules and common aliases (pd/np) to tolerate typical user code
         g.update(self.allowed_modules)
+        g.setdefault("pd", pd)
+        g.setdefault("np", np)
 
         # capture prints
         stdout_io = io.StringIO()

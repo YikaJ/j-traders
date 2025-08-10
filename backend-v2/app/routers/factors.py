@@ -29,6 +29,7 @@ from ..services.ai.agent import CodegenAgent
 from ..services.sandbox import RestrictedSandbox
 from ..services.standardize import zscore_df, compute_diagnostics
 from ..services.tushare_client import TuShareClient
+from ..services.param_binding import bind_params_for_source
 
 router = APIRouter(prefix="/factors", tags=["factors"])
 
@@ -42,11 +43,10 @@ def _flatten_fields(fields_map: dict[str, set[str]]) -> List[str]:
 
 @router.post("/sample", response_model=SampleResponse)
 def sample_data(req: SampleRequest) -> Any:
-    # 自动按 selection 抓取真实样本（带缓存），失败则回退合成（带扰动）
+    # 从 TuShare 抓取真实样本（带缓存）。不再生成 fallback 合成数据。
     spec: SelectionSpec = req.selection
 
-    tickers = req.ts_codes or ["000001.SZ", "600000.SH"]
-    dates = [req.start_date or "20210101", req.end_date or "20210108"]
+    tickers = req.ts_codes or []
 
     ts_client: TuShareClient | None = None
     try:
@@ -57,47 +57,63 @@ def sample_data(req: SampleRequest) -> Any:
     out: Dict[str, List[Dict[str, Any]]] = {}
     notes: List[str] = []
 
+    # 组合可用于绑定的请求参数：通用 request_args + 显式起止日期 + ts_codes
+    request_args: Dict[str, Any] = dict(req.request_args or {})
+    if req.start_date:
+        request_args["start_date"] = req.start_date
+    if req.end_date:
+        request_args["end_date"] = req.end_date
+    if req.ts_codes:
+        # 适配绑定器，允许前端传入 ts_codes 数组
+        request_args["ts_codes"] = req.ts_codes
+
     for item in spec.sources:
         df: pd.DataFrame | None = None
         if ts_client is not None:
             try:
                 meta = load_endpoint_meta(item.endpoint)
-                base_params: Dict[str, Any] = {}
-                if req.start_date:
-                    base_params["start_date"] = req.start_date
-                if req.end_date:
-                    base_params["end_date"] = req.end_date
-                pulled = ts_client.fetch_iter_ts_codes(meta, base_params, tickers)
+                # bind params based on selection + request_args
+                bound_params, iter_ts = bind_params_for_source(item, request_args)
+                # include fields (requested columns) — 仅保留该端点合法字段，避免 Tushare 因未知字段报错
+                try:
+                    if isinstance(meta, dict):
+                        fields_meta = meta.get("fields") or []
+                        valid_fields = {str(f.get("name")) for f in fields_meta if isinstance(f, dict) and f.get("name")}
+                    else:
+                        valid_fields = {str(getattr(f, "name")) for f in getattr(meta, "fields", [])}
+                except Exception:
+                    valid_fields = set()
+                need_cols_all = list(sorted(set(item.fields + spec.join_keys)))
+                need_cols = [c for c in need_cols_all if (not valid_fields or c in valid_fields)]
+                if need_cols:
+                    bound_params["fields"] = ",".join(need_cols)
+                # 决定迭代列表：优先 sources.param 绑定出的 ts_code 列表；其次使用 bound_params 中的单个 ts_code；再其次使用请求体的 ts_codes；否则不迭代
+                iter_list = list(iter_ts or [])
+                if not iter_list:
+                    single_ts = bound_params.get("ts_code")
+                    if isinstance(single_ts, str) and single_ts.strip():
+                        iter_list = [single_ts.strip()]
+                        # 交给迭代器设置 ts_code，避免重复
+                        bound_params.pop("ts_code", None)
+                if not iter_list:
+                    iter_list = tickers
+                if iter_list:
+                    pulled = ts_client.fetch_iter_ts_codes(meta, bound_params, iter_list)
+                else:
+                    pulled = ts_client.fetch(meta, bound_params)
                 if pulled is not None and not pulled.empty:
-                    need_cols = set(item.fields + spec.join_keys)
-                    present = [c for c in pulled.columns if c in need_cols]
-                    if present:
-                        df = pulled[present].copy()
-                        if not set(spec.join_keys).issubset(set(df.columns)):
-                            df = None
+                    need_cols_set = set(need_cols or (item.fields + spec.join_keys))
+                    present = [c for c in pulled.columns if c in need_cols_set] or list(pulled.columns)
+                    df = pulled[present].copy()
             except Exception as e:  # noqa: BLE001
                 notes.append(f"fetch failed for {item.endpoint}: {e}")
                 df = None
+        # 不再生成 fallback。若无数据，返回空数组并附注说明。
         if df is None or df.empty:
-            # fallback synthetic with perturbation
-            rows: List[Dict[str, Any]] = []
-            for ts in tickers:
-                for d in dates:
-                    row: Dict[str, Any] = {}
-                    for f in set(item.fields + spec.output_index):
-                        if f == "ts_code":
-                            row[f] = ts
-                        elif f in ("trade_date", "end_date"):
-                            row[f] = d
-                        else:
-                            idx_t = tickers.index(ts)
-                            idx_d = dates.index(d)
-                            row[f] = 1.0 + 0.2 * idx_t + 0.1 * idx_d
-                    rows.append(row)
-            df = pd.DataFrame(rows)
-            notes.append(f"fallback synthetic for {item.endpoint}")
-
-        out[item.endpoint] = df.head(req.top_n).to_dict(orient="records")
+            notes.append(f"no_data_for {item.endpoint}")
+            out[item.endpoint] = []
+        else:
+            out[item.endpoint] = df.head(req.top_n).to_dict(orient="records")
 
     return SampleResponse(data=out, notes="; ".join(notes) if notes else None)
 

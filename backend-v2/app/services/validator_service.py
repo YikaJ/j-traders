@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Set
 
 from .ast_validator import FactorAstValidator
-from .context_builder import build_agent_context, gather_selection_fields
+from .context_builder import build_agent_context, gather_selection_fields, load_endpoint_meta
 from ..models.selection import SelectionSpec
 
 
@@ -24,6 +24,16 @@ def validate_code_against_selection(code_text: str, spec: SelectionSpec) -> Dict
         allowed_fields.update(fields)
 
     allowed_non_field_tokens: Set[str] = set(spec.join_keys)
+    # also allow per-endpoint axis columns (e.g., trade_date / end_date)
+    try:
+        axes: Set[str] = set()
+        for src in spec.sources:
+            meta = load_endpoint_meta(src.endpoint)
+            if getattr(meta, "axis", None):
+                axes.add(str(meta.axis))
+        allowed_non_field_tokens.update(axes)
+    except Exception:
+        pass
     allowed_non_field_tokens.update(IGNORED_TOKENS)
 
     boundary_errors: List[str] = []

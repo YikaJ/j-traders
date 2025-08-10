@@ -51,10 +51,23 @@ export default function App() {
     return ['/dashboard']
   }, [location.pathname])
 
+  const [tushareInfo, setTushareInfo] = useState<{ configured?: boolean; expire_date?: string; expire_score?: number } | null>(null)
+
   const onHealthCheck = async () => {
     try {
       const { data } = await http.get('/health')
-      message.success(`后端健康：${data.status || 'ok'} v${data.version || ''}`)
+      const info = (data?.tushare?.detail) || {}
+      setTushareInfo({
+        configured: !!info.configured,
+        expire_date: info.expire_date || undefined,
+        expire_score: typeof info.expire_score === 'number' ? info.expire_score : undefined,
+      })
+      if (info.configured) {
+        const msg = `后端健康；TuShare 已配置，最近到期：${info.expire_date || '-'}，到期积分：${info.expire_score ?? '-'}。`
+        message.success(msg)
+      } else {
+        message.warning('后端健康；但未检测到 TuShare Token')
+      }
     } catch (e: any) {
       message.error(`后端不可用：${e?.response?.status || ''}`)
     }
@@ -78,9 +91,14 @@ export default function App() {
         />
       </Sider>
       <Layout>
-        <Header style={{ background: '#fff', padding: '0 16px', display: 'flex', justifyContent: 'space-between' }}>
+        <Header style={{ background: '#fff', padding: '0 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Breadcrumb items={[{ title: <Link to="/">Home</Link> }, ...crumbs.map(c => ({ title: <Link to={c.path}>{c.label}</Link> }))]} />
-          <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {tushareInfo?.configured ? (
+              <span style={{ color: '#666' }}>
+                TuShare 最晚到期：<b>{tushareInfo.expire_date || '-'}</b>，到期积分：<b>{tushareInfo.expire_score ?? '-'}</b>
+              </span>
+            ) : null}
             <Button onClick={onHealthCheck}>健康检查</Button>
           </div>
         </Header>

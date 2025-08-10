@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "endpoints": [
     { "name": "cashflow", "file": "catalog/endpoints/cashflow.json" },
-    { "name": "daily_basic", "file": "catalog/endpoints/daily_basic.json" }
+    { "name": "daily_basic", "file": "catalog/endpoints/daily_basic.json" },
+    { "name": "fina_indicator", "file": "catalog/endpoints/fina_indicator.json" }
   ]
 }

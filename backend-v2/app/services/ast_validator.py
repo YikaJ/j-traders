@@ -90,9 +90,20 @@ class FactorAstValidator:
         # 1) df['col'] style
         for node in ast.walk(tree):
             if isinstance(node, ast.Subscript):
-                key = self._extract_subscript_key(node)
-                if isinstance(key, str):
-                    fields.add(key)
+                # 忽略 data['endpoint'] 这种用于从 data 取端点 DataFrame 的访问，避免把端点名误判为字段
+                try:
+                    base = getattr(node, "value", None)
+                    if isinstance(base, ast.Name) and base.id == "data":
+                        # data['endpoint'] — endpoint 名不是字段
+                        pass
+                    else:
+                        key = self._extract_subscript_key(node)
+                        if isinstance(key, str):
+                            fields.add(key)
+                except Exception:
+                    key = self._extract_subscript_key(node)
+                    if isinstance(key, str):
+                        fields.add(key)
             # 2) df.get('col') style
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
                 if node.args:

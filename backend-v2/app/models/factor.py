@@ -67,6 +67,8 @@ class SampleRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     top_n: int = 10
+    # 允许前端在样例预调用时传入通用参数，参与各个 source 的参数绑定（例如 ann_date、period 等）
+    request_args: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SampleResponse(BaseModel):

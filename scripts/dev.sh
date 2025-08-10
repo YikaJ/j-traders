@@ -59,6 +59,8 @@ start_backend() {
   echo -e "${c_cyan}[*] Starting backend: http://${API_HOST}:${API_PORT}${c_reset}"
   ( \
     cd "$BACKEND_DIR" && \
+    # Load backend-v2/.env if present, so TUSHARE_TOKEN and others are available for dev
+    if [ -f .env ]; then set -a; source .env; set +a; fi; \
     export API_HOST="$API_HOST" API_PORT="$API_PORT" LOG_LEVEL="$LOG_LEVEL" CORS_ORIGINS="$CORS_ORIGINS" && \
     exec uvicorn app.main:app \
       --host "$API_HOST" --port "$API_PORT" --reload \
